@@ -1,0 +1,262 @@
+body {
+    padding: 0;
+    margin: 0;
+    color: #333;
+    font-size: 16px;
+    font-family: "Helvetica Neue", "Luxi Sans", "DejaVu Sans", Tahoma, "Hiragino Sans GB", "Microsoft YaHei", STHeiti;
+}
+
+a {
+    text-decoration: none;
+}
+
+.language {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+}
+
+.language a, .language a:hover, .language a:active, .language a:visited {
+    color: #ccc;
+}
+
+.language a.active {
+    color: #036;
+}
+
+.language .div {
+    color: #ccc;
+    margin: 0 5px;
+}
+
+.content {
+    margin: 0 auto;
+    max-width: 1024px;
+    z-index: 10;
+    position: relative;
+}
+
+.main {
+    text-align: center;
+    margin: 0 auto;
+}
+
+.desc {
+    font-size: 20px;
+}
+
+.price {
+    font-size: 20px;
+}
+
+.contact {
+    padding: 30px 0;
+    font-size: 18px;
+}
+
+.contact span {
+    margin-left: 20px;
+}
+
+.tag {
+    color: #369;
+    display: inline-block;
+    padding: 0 5px;
+    line-height: 18px;
+    height: 20px;
+    vertical-align: middle;
+    border-radius: 4px;
+    box-sizing: border-box;
+    border: 1px solid #369;
+    white-space: normal;
+    font-size: 12px;
+}
+
+.mypark {
+    margin: 20px auto;
+    border: 2px solid #eee;
+    max-width: 648px;
+    background-color: #1064aa;
+    overflow: hidden;
+    display: block;
+    padding: 8px 2px;
+}
+
+.mypark .firstline {
+    color: #fff;
+    font-size: 20px;
+    line-height: 40px;
+    text-align: center;
+    margin-top: 0;
+    margin-bottom: 0;
+}
+
+.mypark .lastline {
+    color: #fff;
+    font-size: 16px;
+    line-height: 32px;
+    text-align: center;
+    margin-top: 0;
+    margin-bottom: 0;
+}
+
+
+.sale {
+    color: #67C23A
+}
+
+.mypark-copy {
+    margin-left: 20px;
+}
+
+h1 {
+    font-size: 2.5em;
+    font-weight: normal;
+}
+
+h2 {
+    font-size: 1.5em;
+    font-weight: normal;
+}
+
+canvas {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    min-width: 100%;
+}
+
+.footer {
+    position: relative;
+    z-index: 10;
+    text-align: center;
+    margin-top: 20px;
+}
+
+.footer a {
+    color: #409EFF
+}
+
+.footer-mypark {
+    margin-left: 30px;
+}
+
+@media(min-width: 768px) {
+    .language {
+        top: 20px;
+    }
+    .main {
+        padding-top: 200px;
+    }
+    .contact-item {
+        display: inline-block;
+    }
+}
+
+@media(max-width: 768px) {
+    .language {
+        top: 10px;
+    }
+    .main {
+        padding-top: 40px;
+    }
+    .contact-item {
+        margin-bottom: 10px;
+        text-align: left;
+        margin-left: 18%
+    }
+    .contact-item span{
+      margin-right: 10px;
+    }
+}
+
+@font-face {
+    font-family: 'fontello';
+    src: url('font/fontello.eot%3Ft=trianglify&64003770');
+    src: url('font/fontello.eot%3Ft=trianglify&64003770') format('embedded-opentype'),
+    url('font/fontello.woff2%3Ft=trianglify&64003770') format('woff2'),
+    url('font/fontello.woff%3Ft=trianglify&64003770') format('woff'),
+    url('font/fontello.ttf%3Ft=trianglify&64003770') format('truetype'),
+    url('font/fontello.svg%3Ft=trianglify&64003770') format('svg');
+    font-weight: normal;
+    font-style: normal;
+}
+
+
+/* Chrome hack: SVG is rendered more smooth in Windozze. 100% magic, uncomment if you need it. */
+
+
+/* Note, that will break hinting! In other OS-es font will be not as sharp as it could be */
+
+
+/*
+@media screen and (-webkit-min-device-pixel-ratio:0) {
+  @font-face {
+    font-family: 'fontello';
+    src: url('../font/fontello.svg?64003770#fontello') format('svg');
+  }
+}
+*/
+
+[class^="icon-"]:before,
+[class*=" icon-"]:before {
+    font-family: "fontello";
+    font-style: normal;
+    font-weight: normal;
+    speak: none;
+
+    display: inline-block;
+    text-decoration: inherit;
+    width: 1em;
+    margin-right: .2em;
+    text-align: center;
+    /* opacity: .8; */
+    /* For safety - reset parent styles, that can break glyph codes*/
+    font-variant: normal;
+    text-transform: none;
+
+    /* fix buttons height, for twitter bootstrap */
+    line-height: 1em;
+
+    /* Animation center compensation - margins should be symmetric */
+    /* remove if not needed */
+    margin-left: .2em;
+
+    /* you can be more comfortable with increased icons size */
+    /* font-size: 120%; */
+    /* Font smoothing. That was taken from TWBS */
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+
+    /* Uncomment for 3D effect */
+    /* text-shadow: 1px 1px 1px rgba(127, 127, 127, 0.3); */
+}
+
+.icon-phone:before {
+    content: '\e800';
+}
+
+
+/* '' */
+
+.icon-mail:before {
+    content: '\f0e0';
+}
+
+
+/* '' */
+
+.icon-qq:before {
+    content: '\f1d6';
+}
+
+
+/* '' */
+
+.icon-wechat:before {
+    content: '\f1d7';
+}
+
+
+/* '' */
