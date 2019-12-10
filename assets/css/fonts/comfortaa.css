@@ -1,0 +1,26 @@
+/* comfortaa-regular - latin_latin-ext */
+@font-face {
+    font-family: 'Comfortaa';
+    font-style: normal;
+    font-weight: 400;
+    src: url('https://cdn.jsdelivr.net/gh/maxhis/assets@master/fonts/comfortaa-v27-latin_latin-ext-regular.eot'); /* IE9 Compat Modes */
+    src: local(''),
+         url('https://cdn.jsdelivr.net/gh/maxhis/assets@master/fonts/comfortaa-v27-latin_latin-ext-regular.eot?#iefix') format('embedded-opentype'), /* IE6-IE8 */
+         url('https://cdn.jsdelivr.net/gh/maxhis/assets@master/fonts/comfortaa-v27-latin_latin-ext-regular.woff2') format('woff2'), /* Super Modern Browsers */
+         url('https://cdn.jsdelivr.net/gh/maxhis/assets@master/fonts/comfortaa-v27-latin_latin-ext-regular.woff') format('woff'), /* Modern Browsers */
+         url('https://cdn.jsdelivr.net/gh/maxhis/assets@master/fonts/comfortaa-v27-latin_latin-ext-regular.ttf') format('truetype'), /* Safari, Android, iOS */
+         url('https://cdn.jsdelivr.net/gh/maxhis/assets@master/fonts/comfortaa-v27-latin_latin-ext-regular.svg#Comfortaa') format('svg'); /* Legacy iOS */
+  }
+  /* comfortaa-700 - latin_latin-ext */
+  @font-face {
+    font-family: 'Comfortaa';
+    font-style: normal;
+    font-weight: 700;
+    src: url('https://cdn.jsdelivr.net/gh/maxhis/assets@master/fonts/comfortaa-v27-latin_latin-ext-700.eot'); /* IE9 Compat Modes */
+    src: local(''),
+         url('https://cdn.jsdelivr.net/gh/maxhis/assets@master/fonts/comfortaa-v27-latin_latin-ext-700.eot?#iefix') format('embedded-opentype'), /* IE6-IE8 */
+         url('https://cdn.jsdelivr.net/gh/maxhis/assets@master/fonts/comfortaa-v27-latin_latin-ext-700.woff2') format('woff2'), /* Super Modern Browsers */
+         url('https://cdn.jsdelivr.net/gh/maxhis/assets@master/fonts/comfortaa-v27-latin_latin-ext-700.woff') format('woff'), /* Modern Browsers */
+         url('https://cdn.jsdelivr.net/gh/maxhis/assets@master/fonts/comfortaa-v27-latin_latin-ext-700.ttf') format('truetype'), /* Safari, Android, iOS */
+         url('https://cdn.jsdelivr.net/gh/maxhis/assets@master/fonts/comfortaa-v27-latin_latin-ext-700.svg#Comfortaa') format('svg'); /* Legacy iOS */
+  }
