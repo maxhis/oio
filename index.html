@@ -56,10 +56,10 @@
                 <header class="logo-env">
                     <!-- logo -->
                     <div class="logo">
-                        <a href="index.html" class="logo-expanded">
+                        <a href="#" class="logo-expanded">
                             <img src="assets/images/logo@2x.svg" width="100%" alt="" />
                         </a>
-                        <a href="index.html" class="logo-collapsed">
+                        <a href="#" class="logo-collapsed">
                             <img src="assets/images/logo-collapsed@2x.png" width="40" alt="" />
                         </a>
                     </div>
@@ -161,12 +161,12 @@
     <!-- JavaScripts initializations and stuff -->
     <script src="assets/js/xenon-custom.js"></script>
     <!-- Vue app -->
-    <script src="https://cdn.jsdelivr.net/npm/vue/dist/vue.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/vue@2.6.11"></script>
     <script>
         Vue.component('menu-item', {
             props: ['category'],
             computed: {
-                link: function() {
+                link: function () {
                     return '#' + this.category.title
                 }
             },
@@ -194,12 +194,12 @@
         Vue.component('site-cell', {
             props: ['site'],
             computed: {
-                imageUrl: function() {
+                imageUrl: function () {
                     return 'assets/images/logos/' + this.site.icon;
                 },
             },
             methods: {
-                redirect: function() {
+                redirect: function () {
                     window.open(this.site.url, '_blank')
                 }
             },
@@ -266,7 +266,6 @@
                 :key="category.title"
                 :category="category"
             ></category-cell>
-            <!-- END 生存必备 -->
             <!-- Main Footer -->
             <!-- Choose between footer styles: "footer-type-1" or "footer-type-2" -->
             <!-- Add class "sticky" to  always stick the footer to the end of page (if page contents is small) -->
