@@ -14,11 +14,11 @@ pnpm build
 pnpm preview
 ```
 
-## Cloudflare Pages
+## Cloudflare
 
-Use these build settings in Cloudflare Pages:
+Use these build settings in Cloudflare:
 
 - Build command: `pnpm build`
 - Build output directory: `dist`
 
-SPA routing fallback is handled by [`public/_redirects`](/Users/istar/proj/oio/public/_redirects).
+SPA routing fallback is configured in [`wrangler.toml`](/Users/istar/proj/oio/wrangler.toml) with `assets.not_found_handling = "single-page-application"`.
