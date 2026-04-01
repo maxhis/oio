@@ -41,6 +41,8 @@ interface Env {
   DB: D1DatabaseLike;
   LOGOS: R2BucketLike;
   ADMIN_DEV_USER_EMAIL?: string;
+  TELEGRAM_BOT_TOKEN?: string;
+  TELEGRAM_CHAT_ID?: string;
 }
 
 interface CategoryRow {
@@ -95,6 +97,12 @@ interface ResolvedSiteMetadata {
   iconUrl: string;
 }
 
+interface SiteSubmissionPayload {
+  website: string;
+  description: string;
+  contact: string;
+}
+
 const LONG_CACHE_CONTROL = "public, max-age=31536000, immutable";
 const NAVIGATION_CACHE_CONTROL = "public, max-age=300, stale-while-revalidate=3600";
 const SITE_LOOKUP_USER_AGENT =
@@ -144,6 +152,20 @@ function collapseWhitespace(value: string): string {
 
 function normalizeOptionalString(value: unknown): string {
   return typeof value === "string" ? collapseWhitespace(value.trim()) : "";
+}
+
+function normalizeMultilineText(value: unknown): string {
+  if (typeof value !== "string") {
+    return "";
+  }
+
+  return value
+    .replace(/\r\n?/g, "\n")
+    .split("\n")
+    .map((line) => line.trim())
+    .join("\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
 }
 
 function normalizeExternalUrl(value: unknown): string {
@@ -558,6 +580,45 @@ function normalizeSiteFields(
   };
 }
 
+function normalizeSubmissionFields(value: unknown): SiteSubmissionPayload {
+  if (!isRecord(value)) {
+    throw new Error("投稿内容格式不正确。");
+  }
+
+  let website = "";
+
+  try {
+    website = normalizeExternalUrl(value.website);
+  } catch {
+    throw new Error("请填写有效的网站地址。");
+  }
+
+  const description = normalizeMultilineText(value.description);
+  const contact = normalizeMultilineText(value.contact);
+
+  if (!website) {
+    throw new Error("请填写网站地址。");
+  }
+
+  if (!description) {
+    throw new Error("请填写站点简介。");
+  }
+
+  if (description.length > 1200) {
+    throw new Error("站点简介请控制在 1200 字以内。");
+  }
+
+  if (contact.length > 200) {
+    throw new Error("联系方式请控制在 200 字以内。");
+  }
+
+  return {
+    website,
+    description,
+    contact,
+  };
+}
+
 function mapSiteRowToAdminRecord(site: SiteRow): AdminSiteRecord {
   return {
     id: site.id,
@@ -713,6 +774,64 @@ function getAdminIdentity(request: Request, env: Env): AdminIdentity | null {
 
 function isAdminAppPath(pathname: string): boolean {
   return pathname === "/admin" || pathname.startsWith("/admin/");
+}
+
+function buildSubmissionTelegramMessage(submission: SiteSubmissionPayload, request: Request): string {
+  const submittedAt = new Date().toISOString();
+  const userAgent = request.headers.get("user-agent")?.trim().slice(0, 280) ?? "";
+  const forwardedFor = request.headers.get("cf-connecting-ip")?.trim() ?? "";
+  const details = [
+    "oio 投稿",
+    "",
+    `网站: ${submission.website}`,
+    "",
+    "简介:",
+    submission.description,
+    "",
+    `联系方式: ${submission.contact || "未填写"}`,
+    `提交时间: ${submittedAt}`,
+  ];
+
+  if (forwardedFor) {
+    details.push(`来源 IP: ${forwardedFor}`);
+  }
+
+  if (userAgent) {
+    details.push(`User-Agent: ${userAgent}`);
+  }
+
+  return details.join("\n");
+}
+
+async function sendTelegramMessage(env: Env, text: string): Promise<void> {
+  if (!env.TELEGRAM_BOT_TOKEN || !env.TELEGRAM_CHAT_ID) {
+    throw new Error("submission-channel-unavailable");
+  }
+
+  const response = await fetch(`https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/sendMessage`, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json; charset=utf-8",
+    },
+    body: JSON.stringify({
+      chat_id: env.TELEGRAM_CHAT_ID,
+      text,
+      disable_web_page_preview: true,
+    }),
+  });
+
+  if (!response.ok) {
+    const body = await response.text();
+    console.error("Telegram sendMessage failed.", response.status, body);
+    throw new Error("submission-delivery-failed");
+  }
+
+  const payload = await response.json() as { ok?: boolean };
+
+  if (!payload.ok) {
+    console.error("Telegram API returned a non-ok payload.", payload);
+    throw new Error("submission-delivery-failed");
+  }
 }
 
 async function seedNavigationIfEmpty(env: Env): Promise<boolean> {
@@ -1254,6 +1373,53 @@ async function handleNavigationRequest(env: Env): Promise<Response> {
   }
 }
 
+async function handleSubmissionRequest(request: Request, env: Env): Promise<Response> {
+  if (request.method !== "POST") {
+    return new Response("Method Not Allowed", {
+      status: 405,
+      headers: {
+        Allow: "POST",
+      },
+    });
+  }
+
+  try {
+    const body = await parseJsonBody(request);
+    const submission = normalizeSubmissionFields(body);
+    const message = buildSubmissionTelegramMessage(submission, request);
+
+    await sendTelegramMessage(env, message);
+
+    return json(
+      { ok: true },
+      {
+        status: 201,
+        headers: {
+          "cache-control": "no-store",
+        },
+      },
+    );
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Failed to submit site.";
+    const isDeliveryError = message === "submission-channel-unavailable"
+      || message === "submission-delivery-failed";
+
+    return json(
+      {
+        error: isDeliveryError
+          ? "投稿通道暂时不可用，请稍后再试。"
+          : message,
+      },
+      {
+        status: isDeliveryError ? 503 : 400,
+        headers: {
+          "cache-control": "no-store",
+        },
+      },
+    );
+  }
+}
+
 async function handleAdminSessionRequest(request: Request, env: Env): Promise<Response> {
   const identity = getAdminIdentity(request, env);
 
@@ -1745,6 +1911,10 @@ const worker = {
 
     if (url.pathname === "/api/navigation") {
       return handleNavigationRequest(env);
+    }
+
+    if (url.pathname === "/api/submissions") {
+      return handleSubmissionRequest(request, env);
     }
 
     if (url.pathname === "/api/admin/session") {

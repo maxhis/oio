@@ -15,14 +15,13 @@ const emit = defineEmits<{
   (event: "toggleSidebar"): void;
   (event: "toggleMobileMenu"): void;
   (event: "selectCategory", title: string): void;
+  (event: "openSubmissionModal"): void;
 }>();
 
 const MenuIcon = uiIcons.menu;
 const CloseIcon = uiIcons.close;
 const HeartIcon = uiIcons.heart;
 const MailIcon = uiIcons.mail;
-const submissionEmail = `${["mail", "oio", "dev"].join(".")}@gmail.com`;
-const submissionMailto = `mailto:${submissionEmail}`;
 
 function getCategoryIcon(icon: string) {
   return categoryIcons[icon] ?? categoryIcons.featured;
@@ -96,10 +95,10 @@ function getCategoryIcon(icon: string) {
         <HeartIcon :size="18" :stroke-width="2" />
         <span class="site-sidebar__label">关于本站</span>
       </RouterLink>
-      <a :href="submissionMailto" class="site-sidebar__secondary-link">
+      <button type="button" class="site-sidebar__secondary-link" @click="emit('openSubmissionModal')">
         <MailIcon :size="18" :stroke-width="2" />
         <span class="site-sidebar__label">我要投稿</span>
-      </a>
+      </button>
     </div>
   </aside>
 </template>

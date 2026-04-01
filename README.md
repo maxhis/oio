@@ -62,6 +62,8 @@ pnpm cf:dev
 
 ```bash
 ADMIN_DEV_USER_EMAIL=local-dev@oio.local
+TELEGRAM_BOT_TOKEN=123456:example-token
+TELEGRAM_CHAT_ID=123456789
 ```
 
 如果前端仍然使用 `pnpm dev` 单独启动 Vite，可在 `.env.local` 里配置：
@@ -81,6 +83,7 @@ VITE_API_BASE_URL=http://127.0.0.1:8787
 登录方式可以先用邮箱一次性验证码，或者接你自己的 IdP。
 
 Worker 当前会读取 `Cf-Access-Authenticated-User-Email` 作为后台身份来源；本地开发则允许使用 `.dev.vars` 中的 `ADMIN_DEV_USER_EMAIL`。
+公开投稿接口 `/api/submissions` 会读取 `.dev.vars` 或 Cloudflare secrets/vars 中的 `TELEGRAM_BOT_TOKEN` 与 `TELEGRAM_CHAT_ID`，将用户填写的网站、简介和联系方式转发到 Telegram。
 
 ### 5. 部署
 

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-  import { computed, nextTick, onBeforeUnmount, onMounted, ref } from "vue";
+  import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
   import { RouterLink } from "vue-router";
 
   import AppFooter from "../components/AppFooter.vue";
@@ -8,15 +8,28 @@
   import { type Category } from "../data/navigation";
   import { uiIcons } from "../icons";
   import { fallbackNavigationCategories, loadNavigationCategories } from "../services/navigation";
+  import {
+    createEmptySiteSubmissionInput,
+    submitSiteSubmission,
+    type SiteSubmissionInput,
+  } from "../services/submissions";
 
   const categories = ref<Category[]>(fallbackNavigationCategories);
   const activeCategory = ref(categories.value[0]?.title ?? "");
   const isSidebarCollapsed = ref(false);
   const isMobileMenuVisible = ref(false);
+  const isSubmissionModalOpen = ref(false);
+  const isSubmissionSubmitting = ref(false);
+  const submissionErrorMessage = ref("");
+  const submissionSuccessMessage = ref("");
+  const submissionForm = ref<SiteSubmissionInput>(createEmptySiteSubmissionInput());
+  const submissionWebsiteInput = ref<HTMLInputElement | null>(null);
   const MenuIcon = uiIcons.menu;
+  const CloseIcon = uiIcons.close;
   const totalSites = computed(() =>
     categories.value.reduce((count, category) => count + category.sites.length, 0),
   );
+  const submissionDescriptionLength = computed(() => submissionForm.value.description.length);
 
   let scrollFrame = 0;
   let resizeFrame = 0;
@@ -49,6 +62,58 @@
   function closeMobileMenu() {
     isMobileMenuVisible.value = false;
     document.body.classList.remove("menu-mobile-open");
+  }
+
+  function resetSubmissionForm() {
+    submissionForm.value = createEmptySiteSubmissionInput();
+  }
+
+  function openSubmissionModal() {
+    closeMobileMenu();
+    submissionErrorMessage.value = "";
+    submissionSuccessMessage.value = "";
+    isSubmissionModalOpen.value = true;
+  }
+
+  function closeSubmissionModal() {
+    if (isSubmissionSubmitting.value) {
+      return;
+    }
+
+    isSubmissionModalOpen.value = false;
+    submissionErrorMessage.value = "";
+  }
+
+  async function submitSubmission() {
+    submissionErrorMessage.value = "";
+    submissionSuccessMessage.value = "";
+
+    const website = submissionForm.value.website.trim();
+    const description = submissionForm.value.description.trim();
+
+    if (!website) {
+      submissionErrorMessage.value = "请先填写站点地址。";
+      await nextTick();
+      submissionWebsiteInput.value?.focus();
+      return;
+    }
+
+    if (!description) {
+      submissionErrorMessage.value = "请补充站点简介，方便我判断是否收录。";
+      return;
+    }
+
+    isSubmissionSubmitting.value = true;
+
+    try {
+      await submitSiteSubmission(submissionForm.value);
+      resetSubmissionForm();
+      submissionSuccessMessage.value = "投稿已收到，后续会尽快处理。";
+    } catch (error) {
+      submissionErrorMessage.value = error instanceof Error ? error.message : "投稿提交失败，请稍后再试。";
+    } finally {
+      isSubmissionSubmitting.value = false;
+    }
   }
 
   function syncActiveCategory() {
@@ -136,6 +201,7 @@
   onMounted(async () => {
     window.addEventListener("scroll", requestSyncActiveCategory, { passive: true });
     window.addEventListener("resize", handleResize);
+    window.addEventListener("keydown", handleWindowKeydown);
 
     applyCategories(await loadNavigationCategories());
     await nextTick();
@@ -156,7 +222,28 @@
 
     window.removeEventListener("scroll", requestSyncActiveCategory);
     window.removeEventListener("resize", handleResize);
+    window.removeEventListener("keydown", handleWindowKeydown);
     document.body.classList.remove("menu-mobile-open");
+    document.body.classList.remove("submission-modal-open");
+  });
+
+  function handleWindowKeydown(event: KeyboardEvent) {
+    if (event.key === "Escape" && isSubmissionModalOpen.value) {
+      closeSubmissionModal();
+    }
+  }
+
+  watch(isSubmissionModalOpen, async (open) => {
+    if (typeof document === "undefined") {
+      return;
+    }
+
+    document.body.classList.toggle("submission-modal-open", open);
+
+    if (open) {
+      await nextTick();
+      submissionWebsiteInput.value?.focus();
+    }
   });
 </script>
 
@@ -167,7 +254,7 @@
   }">
     <SidebarMenu :categories="categories" :active-category="activeCategory" :is-collapsed="isSidebarCollapsed"
       :is-mobile-visible="isMobileMenuVisible" @toggle-sidebar="toggleSidebar" @toggle-mobile-menu="toggleMobileMenu"
-      @select-category="scrollToCategory" />
+      @select-category="scrollToCategory" @open-submission-modal="openSubmissionModal" />
 
     <div class="site-shell__backdrop" :class="{ visible: isMobileMenuVisible }" @click="closeMobileMenu"></div>
 
@@ -206,5 +293,83 @@
 
       <AppFooter />
     </main>
+
+    <Teleport to="body">
+      <div v-if="isSubmissionModalOpen" class="submission-modal-backdrop" @click.self="closeSubmissionModal">
+        <section class="submission-modal" role="dialog" aria-modal="true" aria-labelledby="submission-modal-title">
+          <header class="submission-modal__header">
+            <div>
+              <p class="site-sidebar__kicker">Share A Site</p>
+              <h2 id="submission-modal-title">推荐一个值得收录的站点</h2>
+              <p>
+                填写站点地址、简介和联系方式后，就可以直接提交投稿。
+              </p>
+            </div>
+
+            <button type="button" class="submission-modal__close" aria-label="关闭投稿弹窗" @click="closeSubmissionModal">
+              <CloseIcon :size="18" :stroke-width="2.1" />
+            </button>
+          </header>
+
+          <form class="submission-form" @submit.prevent="submitSubmission">
+            <label class="submission-field">
+              <span class="submission-field__label">网站</span>
+              <input
+                ref="submissionWebsiteInput"
+                v-model="submissionForm.website"
+                type="url"
+                name="website"
+                placeholder="https://example.com"
+                autocomplete="url"
+                :disabled="isSubmissionSubmitting"
+              />
+            </label>
+
+            <label class="submission-field">
+              <span class="submission-field__label">简介</span>
+              <textarea
+                v-model="submissionForm.description"
+                name="description"
+                rows="5"
+                maxlength="1200"
+                placeholder="这个网站解决什么问题，为什么值得长期收藏。"
+                :disabled="isSubmissionSubmitting"
+              ></textarea>
+              <span class="submission-field__hint">{{ submissionDescriptionLength }}/1200</span>
+            </label>
+
+            <label class="submission-field">
+              <span class="submission-field__label">联系方式 <em>可选</em></span>
+              <input
+                v-model="submissionForm.contact"
+                type="text"
+                name="contact"
+                maxlength="200"
+                placeholder="Telegram / 微信 / 邮箱"
+                autocomplete="off"
+                :disabled="isSubmissionSubmitting"
+              />
+            </label>
+
+            <p v-if="submissionErrorMessage" class="submission-feedback submission-feedback--error">
+              {{ submissionErrorMessage }}
+            </p>
+            <p v-else-if="submissionSuccessMessage" class="submission-feedback submission-feedback--success">
+              {{ submissionSuccessMessage }}
+            </p>
+
+            <div class="submission-modal__actions">
+              <button type="button" class="submission-button submission-button--ghost" :disabled="isSubmissionSubmitting"
+                @click="closeSubmissionModal">
+                取消
+              </button>
+              <button type="submit" class="submission-button submission-button--primary" :disabled="isSubmissionSubmitting">
+                {{ isSubmissionSubmitting ? "提交中..." : "发送投稿" }}
+              </button>
+            </div>
+          </form>
+        </section>
+      </div>
+    </Teleport>
   </div>
 </template>
