@@ -3,8 +3,6 @@
 
   import AppFooter from "../components/AppFooter.vue";
 
-  const submissionEmail = `${["mail", "oio", "dev"].join(".")}@gmail.com`;
-  const submissionMailto = `mailto:${submissionEmail}`;
 </script>
 
 <template>
@@ -20,7 +18,6 @@
             <span class="about-hero__brand-text">开发者网址导航</span>
           </span>
         </RouterLink>
-        <p class="about-hero__eyebrow">About oio.15tar.com</p>
         <h1 class="about-hero__title">这不是“站点大全”，而是一份偏个人、偏长期使用的开发索引。</h1>
         <p class="about-hero__description">
           目标很简单，把真正会反复打开的工具、文档、学习资源和灵感站点，从混乱收藏夹里拎出来，整理成按场景浏览的入口。
@@ -48,24 +45,23 @@
 
         <div class="about-profile">
           <a class="about-profile__card" href="https://go.15tar.com/blog" target="_blank" rel="noreferrer">
-            <img :src="'/assets/images/logos/profile.PNG'" width="64" height="64" alt="iStar"
-              class="about-profile__avatar" />
-            <div>
-              <div class="about-profile__name">iStar</div>
-              <p class="about-profile__role">Developer, creating things.</p>
+            <div class="about-profile__card-head">
+              <img :src="'/assets/images/logos/profile.PNG'" width="64" height="64" alt="iStar"
+                class="about-profile__avatar" />
+              <div class="about-profile__identity">
+                <span class="about-profile__label">Maintainer</span>
+                <div class="about-profile__name">iStar</div>
+                <p class="about-profile__role">Developer, creating things.</p>
+              </div>
             </div>
+            <div class="about-profile__facts" aria-label="站长信息">
+              <span class="about-profile__fact">移动 App 开发 10+ 年</span>
+              <span class="about-profile__fact">马拉松爱好者</span>
+              <span class="about-profile__fact">持续整理常用工具与文档</span>
+              <span class="about-profile__fact">偏爱长期可复用的工作流</span>
+            </div>
+            <span class="about-profile__action">进入博客</span>
           </a>
-
-          <div class="about-profile__copy">
-            <h2>关于站长</h2>
-            <p>
-              站长是从事移动 app 开发十余年的程序员，建立本站的目的是为了提高自己的效率，希望对你也有用。
-            </p>
-            <p>
-              如果你有更好的想法或提交网址，欢迎与我交流分享：
-              <a :href="submissionMailto">邮箱联系</a>
-            </p>
-          </div>
         </div>
       </section>
 

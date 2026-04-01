@@ -15,7 +15,6 @@ function getCategoryIcon(icon: string) {
 <template>
   <section :id="props.category.title" class="category-section">
     <header class="category-section__header">
-      <p class="category-section__eyebrow">Category</p>
       <h2 class="category-section__title">
         <component
           :is="getCategoryIcon(props.category.icon)"

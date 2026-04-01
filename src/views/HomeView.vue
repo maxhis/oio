@@ -181,7 +181,6 @@
 
       <section class="hero-panel">
         <div class="hero-panel__content">
-          <p class="hero-panel__eyebrow">Developer Index</p>
           <h1 class="hero-panel__title">把常用开发资源整理成一份真正可浏览的索引。</h1>
           <p class="hero-panel__description">
             从大前端到大后端，从学习资源到日常工具，把容易遗失在收藏夹里的站点按使用场景归档。
