@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import { computed } from "vue";
 import { RouterLink } from "vue-router";
 
 import { categoryIcons, uiIcons } from "../icons";
@@ -22,16 +21,13 @@ const MenuIcon = uiIcons.menu;
 const CloseIcon = uiIcons.close;
 const HeartIcon = uiIcons.heart;
 const MailIcon = uiIcons.mail;
+const submissionEmail = `${["mail", "oio", "dev"].join(".")}@gmail.com`;
+const submissionMailto = `mailto:${submissionEmail}`;
 
 function getCategoryIcon(icon: string) {
   return categoryIcons[icon] ?? categoryIcons.featured;
 }
 
-const sidebarBrandSrc = computed(() =>
-  props.isCollapsed
-    ? "/assets/images/logo-collapsed@2x.png"
-    : "/assets/images/logo@2x.svg",
-);
 </script>
 
 <template>
@@ -44,13 +40,12 @@ const sidebarBrandSrc = computed(() =>
   >
     <header class="site-sidebar__header">
       <RouterLink to="/" class="site-brand">
-        <img
-          :src="sidebarBrandSrc"
-          :class="{ 'site-brand__mark': isCollapsed, 'site-brand__logo': !isCollapsed }"
-          alt="oio.dev"
-        />
-        <span v-if="!isCollapsed" class="site-brand__text">
-          开发者网址导航
+        <span class="site-brand__badge" aria-hidden="true">
+          <img src="/assets/images/logo-mark.svg" class="site-brand__mark" alt="" />
+        </span>
+        <span class="site-brand__copy">
+          <span class="site-brand__domain">oio.15tar.com</span>
+          <span class="site-brand__text">开发者网址导航</span>
         </span>
       </RouterLink>
 
@@ -74,8 +69,8 @@ const sidebarBrandSrc = computed(() =>
       </div>
     </header>
 
-    <div class="site-sidebar__intro" v-if="!isCollapsed">
-      <p class="site-sidebar__kicker">oio.dev</p>
+    <div class="site-sidebar__intro">
+      <p class="site-sidebar__kicker">oio.15tar.com</p>
       <p class="site-sidebar__blurb">
         收集经常回访、值得长期保存的开发资源，把书签整理成真正可浏览的索引。
       </p>
@@ -101,7 +96,7 @@ const sidebarBrandSrc = computed(() =>
         <HeartIcon :size="18" :stroke-width="2" />
         <span class="site-sidebar__label">关于本站</span>
       </RouterLink>
-      <a href="mailto:mail.oio.dev@gmail.com" class="site-sidebar__secondary-link">
+      <a :href="submissionMailto" class="site-sidebar__secondary-link">
         <MailIcon :size="18" :stroke-width="2" />
         <span class="site-sidebar__label">我要投稿</span>
       </a>

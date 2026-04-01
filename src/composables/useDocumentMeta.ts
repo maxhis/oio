@@ -3,11 +3,11 @@ import { useRoute } from "vue-router";
 
 type RouteMetaValue = string | undefined;
 
-const DEFAULT_TITLE = "oio.dev - 开发者网址导航";
+const DEFAULT_TITLE = "oio.15tar.com - 开发者网址导航";
 const DEFAULT_DESCRIPTION =
-  "oio - 收集国内外优秀开发工具网站、app开发资源网站、灵感创意网站、素材资源网站，定时更新分享优质开发书签。oio.dev";
+  "oio - 收集国内外优秀开发工具网站、app开发资源网站、灵感创意网站、素材资源网站，定时更新分享优质开发书签。oio.15tar.com";
 const DEFAULT_KEYWORDS =
-  "app开发,iOS开发,Android开发,React Native开发,Flutter开发,小程序开发,app开发资源,网址导航,创意导航,程序员网址大全,开发者网址大全,跨平台app开发 oio.dev";
+  "app开发,iOS开发,Android开发,React Native开发,Flutter开发,小程序开发,app开发资源,网址导航,创意导航,程序员网址大全,开发者网址大全,跨平台app开发 oio.15tar.com";
 const DEFAULT_IMAGE = "/assets/images/oio_banner.png";
 
 function ensureMeta(selector: string, attr: "name" | "property", key: string) {

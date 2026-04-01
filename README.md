@@ -1,4 +1,4 @@
-[➡️ oio.dev](https://oio.15tar.com) - 开发者网址导航
+[➡️ oio.15tar.com](https://oio.15tar.com) - 开发者网址导航
 
 ## Development
 

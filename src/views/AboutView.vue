@@ -2,6 +2,9 @@
   import { RouterLink } from "vue-router";
 
   import AppFooter from "../components/AppFooter.vue";
+
+  const submissionEmail = `${["mail", "oio", "dev"].join(".")}@gmail.com`;
+  const submissionMailto = `mailto:${submissionEmail}`;
 </script>
 
 <template>
@@ -9,9 +12,15 @@
     <main class="about-layout">
       <header class="about-hero">
         <RouterLink to="/" class="about-hero__brand">
-          <img :src="'/assets/images/logo_dark@2x.svg'" alt="oio.dev" class="about-hero__logo" />
+          <span class="about-hero__badge" aria-hidden="true">
+            <img src="/assets/images/logo-mark.svg" alt="" class="about-hero__logo" />
+          </span>
+          <span class="about-hero__brand-copy">
+            <span class="about-hero__domain">oio.15tar.com</span>
+            <span class="about-hero__brand-text">开发者网址导航</span>
+          </span>
         </RouterLink>
-        <p class="about-hero__eyebrow">About oio.dev</p>
+        <p class="about-hero__eyebrow">About oio.15tar.com</p>
         <h1 class="about-hero__title">这不是“站点大全”，而是一份偏个人、偏长期使用的开发索引。</h1>
         <p class="about-hero__description">
           目标很简单，把真正会反复打开的工具、文档、学习资源和灵感站点，从混乱收藏夹里拎出来，整理成按场景浏览的入口。
@@ -38,7 +47,7 @@
         </div>
 
         <div class="about-profile">
-          <a class="about-profile__card" href="https://go.oio.dev/blog" target="_blank" rel="noreferrer">
+          <a class="about-profile__card" href="https://go.15tar.com/blog" target="_blank" rel="noreferrer">
             <img :src="'/assets/images/logos/profile.PNG'" width="64" height="64" alt="iStar"
               class="about-profile__avatar" />
             <div>
@@ -54,7 +63,7 @@
             </p>
             <p>
               如果你有更好的想法或提交网址，欢迎与我交流分享：
-              <a href="mailto:mail.oio.dev@gmail.com">mail.oio.dev@gmail.com</a>
+              <a :href="submissionMailto">邮箱联系</a>
             </p>
           </div>
         </div>

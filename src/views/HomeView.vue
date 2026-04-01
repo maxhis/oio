@@ -165,7 +165,7 @@
         <button type="button" class="site-mobilebar__toggle" @click="toggleMobileMenu" aria-label="打开导航菜单">
           <MenuIcon :size="18" :stroke-width="2.1" />
         </button>
-        <RouterLink to="/" class="site-mobilebar__brand">oio.dev</RouterLink>
+        <RouterLink to="/" class="site-mobilebar__brand">oio.15tar.com</RouterLink>
       </header>
 
       <section class="hero-panel">
