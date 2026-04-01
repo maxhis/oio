@@ -86,9 +86,8 @@ img {
   gap: 1.5rem;
   height: 100vh;
   padding: 1.4rem;
-  background: rgba(247, 242, 233, 0.82);
+  background: rgba(247, 242, 233, 0.96);
   border-right: 1px solid var(--border);
-  backdrop-filter: blur(14px);
 }
 
 .site-sidebar__header,
@@ -314,9 +313,10 @@ img {
   padding: 1.6rem;
   border-radius: var(--radius-xl);
   border: 1px solid rgba(76, 61, 46, 0.08);
-  background: var(--panel);
+  background: rgba(255, 251, 245, 0.94);
   box-shadow: 0 14px 40px rgba(65, 48, 30, 0.08);
-  backdrop-filter: blur(10px);
+  content-visibility: auto;
+  contain-intrinsic-size: 1px 720px;
 }
 
 .category-section__header {
@@ -657,7 +657,6 @@ img {
     inset: 0;
     z-index: 20;
     background: rgba(30, 25, 20, 0.26);
-    backdrop-filter: blur(3px);
   }
 
   .hero-panel,

@@ -22,6 +22,8 @@ defineProps<{
           width="44"
           height="44"
           :alt="site.title"
+          loading="lazy"
+          decoding="async"
         />
       </div>
       <div class="site-card__body">

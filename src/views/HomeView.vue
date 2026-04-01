@@ -1,5 +1,5 @@
 <script setup lang="ts">
-  import { nextTick, onBeforeUnmount, onMounted, ref } from "vue";
+  import { computed, nextTick, onBeforeUnmount, onMounted, ref } from "vue";
   import { RouterLink } from "vue-router";
 
   import AppFooter from "../components/AppFooter.vue";
@@ -13,6 +13,13 @@
   const isSidebarCollapsed = ref(false);
   const isMobileMenuVisible = ref(false);
   const MenuIcon = uiIcons.menu;
+  const totalSites = computed(() =>
+    categories.reduce((count, category) => count + category.sites.length, 0),
+  );
+
+  let scrollFrame = 0;
+  let resizeFrame = 0;
+  let categoryOffsets: Array<{ title: string; top: number }> = [];
 
   function scrollToCategory(title: string) {
     const target = document.getElementById(title);
@@ -47,19 +54,57 @@
     const offset = window.scrollY + 140;
     let current = categories[0]?.title ?? "";
 
-    for (const category of categories) {
-      const element = document.getElementById(category.title);
-
-      if (!element) {
-        continue;
-      }
-
-      if (element.getBoundingClientRect().top + window.scrollY - 60 <= offset) {
+    for (const category of categoryOffsets) {
+      if (category.top <= offset) {
         current = category.title;
       }
     }
 
-    activeCategory.value = current;
+    if (activeCategory.value !== current) {
+      activeCategory.value = current;
+    }
+  }
+
+  function measureCategoryOffsets() {
+    categoryOffsets = categories
+      .map((category) => {
+        const element = document.getElementById(category.title);
+
+        if (!element) {
+          return null;
+        }
+
+        return {
+          title: category.title,
+          top: Math.max(0, element.offsetTop - 60),
+        };
+      })
+      .filter((item): item is { title: string; top: number } => item !== null);
+  }
+
+  function requestSyncActiveCategory() {
+    if (scrollFrame) {
+      return;
+    }
+
+    scrollFrame = window.requestAnimationFrame(() => {
+      scrollFrame = 0;
+      syncActiveCategory();
+    });
+  }
+
+  function handleResize() {
+    closeMobileMenu();
+
+    if (resizeFrame) {
+      window.cancelAnimationFrame(resizeFrame);
+    }
+
+    resizeFrame = window.requestAnimationFrame(() => {
+      resizeFrame = 0;
+      measureCategoryOffsets();
+      syncActiveCategory();
+    });
   }
 
   function scrollToInitialHash() {
@@ -80,16 +125,26 @@
   }
 
   onMounted(async () => {
-    window.addEventListener("scroll", syncActiveCategory, { passive: true });
-    window.addEventListener("resize", closeMobileMenu);
+    window.addEventListener("scroll", requestSyncActiveCategory, { passive: true });
+    window.addEventListener("resize", handleResize);
     await nextTick();
+    measureCategoryOffsets();
     scrollToInitialHash();
+    measureCategoryOffsets();
     syncActiveCategory();
   });
 
   onBeforeUnmount(() => {
-    window.removeEventListener("scroll", syncActiveCategory);
-    window.removeEventListener("resize", closeMobileMenu);
+    if (scrollFrame) {
+      window.cancelAnimationFrame(scrollFrame);
+    }
+
+    if (resizeFrame) {
+      window.cancelAnimationFrame(resizeFrame);
+    }
+
+    window.removeEventListener("scroll", requestSyncActiveCategory);
+    window.removeEventListener("resize", handleResize);
     document.body.classList.remove("menu-mobile-open");
   });
 </script>
@@ -128,7 +183,7 @@
           </div>
           <div class="hero-stat">
             <span class="hero-stat__value">
-              {{categories.reduce((count, category) => count + category.sites.length, 0)}}
+              {{ totalSites }}
             </span>
             <span class="hero-stat__label">站点</span>
           </div>
