@@ -2,7 +2,9 @@
 import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import { RouterLink } from "vue-router";
 
+import { categoryIconOptions, categoryIcons } from "../icons";
 import {
+  buildAdminIconUrl,
   createAdminCategory,
   createAdminSite,
   createEmptyCategoryInput,
@@ -13,12 +15,14 @@ import {
   loadAdminSession,
   reorderAdminCategories,
   reorderAdminSites,
+  resolveAdminSiteMetadata,
   updateAdminCategory,
   updateAdminSite,
   type AdminCategory,
   type AdminSession,
   type AdminSite,
   type CategoryInput,
+  type ResolvedSiteMetadata,
   type SiteInput,
 } from "../services/admin";
 
@@ -39,6 +43,19 @@ const isLoading = ref(true);
 const busyKey = ref("");
 const notice = ref("");
 const errorMessage = ref("");
+const siteMetadata = ref<ResolvedSiteMetadata | null>(null);
+const siteMetadataStatus = ref<"idle" | "loading" | "success" | "error">("idle");
+const siteMetadataMessage = ref("");
+const siteAutofillSnapshot = ref({
+  title: "",
+  subTitle: "",
+  displayLink: "",
+  icon: "",
+});
+
+let siteMetadataTimer: ReturnType<typeof setTimeout> | null = null;
+let shouldSkipNextSiteLookup = false;
+let lastResolvedSiteUrl = "";
 
 const selectedCategory = computed(() =>
   categories.value.find((category) => category.id === selectedCategoryId.value) ?? null,
@@ -83,16 +100,12 @@ const siteFormIssues = computed(() => {
     issues.push("站点副标题不能为空。");
   }
 
-  if (!siteDraft.value.displayLink.trim()) {
-    issues.push("展示链接不能为空。");
-  }
-
   if (!siteDraft.value.url.trim()) {
     issues.push("跳转 URL 不能为空。");
   }
 
   if (!siteDraft.value.icon.trim()) {
-    issues.push("图标文件不能为空。");
+    issues.push("站点图标不能为空。");
   }
 
   return issues;
@@ -130,21 +143,52 @@ const siteStatus = computed(() => {
   return siteMode.value === "create" ? "新建站点" : "编辑站点";
 });
 
-const pageStatus = computed(() => {
-  if (isLoading.value) {
-    return "读取中";
-  }
-
-  if (busyKey.value) {
-    return "正在提交 CRUD 操作";
-  }
-
-  return "逐项保存";
-});
-
 const hasCategories = computed(() => categories.value.length > 0);
 const hasSelectedCategory = computed(() => Boolean(selectedCategory.value));
 const isAnyModalOpen = computed(() => isCategoryModalOpen.value || isSiteModalOpen.value);
+const isCategoryIconPreset = computed(() =>
+  categoryIconOptions.some((option) => option.key === categoryDraft.value.icon),
+);
+const activeCategoryIconOption = computed(() =>
+  categoryIconOptions.find((option) => option.key === categoryDraft.value.icon) ?? null,
+);
+const siteIconPreviewUrl = computed(() => {
+  if (siteMetadata.value?.iconUrl) {
+    return siteMetadata.value.iconUrl;
+  }
+
+  return buildAdminIconUrl(siteDraft.value.icon || "default.png");
+});
+const sitePreviewTitle = computed(() => siteDraft.value.title.trim() || "等待解析站点标题");
+const sitePreviewSubTitle = computed(() => siteDraft.value.subTitle.trim() || "输入跳转链接后自动尝试抓取简介，也可以手动补充。");
+const sitePreviewDisplayLink = computed(() => siteDraft.value.displayLink.trim() || siteDraft.value.url.trim() || "展示链接默认与跳转链接一致");
+const siteMetadataStatusText = computed(() => {
+  if (siteMetadataStatus.value === "loading") {
+    return "正在解析站点信息并抓取图标";
+  }
+
+  if (siteMetadataStatus.value === "success") {
+    return siteMetadataMessage.value || "站点信息已更新";
+  }
+
+  if (siteMetadataStatus.value === "error") {
+    return siteMetadataMessage.value || "站点信息解析失败";
+  }
+
+  return siteMetadataMessage.value || "输入跳转链接后会自动解析标题、简介和图标。";
+});
+
+function getCategoryIcon(icon: string) {
+  return categoryIcons[icon as keyof typeof categoryIcons] ?? categoryIcons.featured;
+}
+
+function getSiteIconUrl(icon: string) {
+  return buildAdminIconUrl(icon || "default.png");
+}
+
+function selectCategoryIcon(icon: string) {
+  categoryDraft.value.icon = icon;
+}
 
 function clearFeedback() {
   notice.value = "";
@@ -157,6 +201,46 @@ function isBusy(key?: string): boolean {
   }
 
   return isLoading.value || busyKey.value === key;
+}
+
+function resetSiteMetadataState() {
+  siteMetadata.value = null;
+  siteMetadataStatus.value = "idle";
+  siteMetadataMessage.value = "";
+  siteAutofillSnapshot.value = {
+    title: "",
+    subTitle: "",
+    displayLink: "",
+    icon: "",
+  };
+  lastResolvedSiteUrl = "";
+}
+
+function clearPendingSiteMetadataLookup() {
+  if (!siteMetadataTimer) {
+    return;
+  }
+
+  clearTimeout(siteMetadataTimer);
+  siteMetadataTimer = null;
+}
+
+function shouldApplyAutofill(currentValue: string, previousAutoValue: string): boolean {
+  const normalizedCurrent = currentValue.trim();
+  const normalizedPrevious = previousAutoValue.trim();
+
+  return !normalizedCurrent || (Boolean(normalizedPrevious) && normalizedCurrent === normalizedPrevious);
+}
+
+function createNormalizedSitePayload(input: SiteInput): SiteInput {
+  return {
+    ...input,
+    title: input.title.trim(),
+    subTitle: input.subTitle.trim(),
+    displayLink: input.displayLink.trim(),
+    url: input.url.trim(),
+    icon: input.icon.trim() || "default.png",
+  };
 }
 
 function confirmDanger(message: string): boolean {
@@ -177,6 +261,7 @@ function fillCategoryDraft(category: AdminCategory | null) {
 }
 
 function fillSiteDraft(site: AdminSite | null, fallbackCategoryId = selectedCategoryId.value ?? 0) {
+  shouldSkipNextSiteLookup = true;
   siteDraft.value = site
     ? {
       categoryId: site.categoryId,
@@ -187,6 +272,7 @@ function fillSiteDraft(site: AdminSite | null, fallbackCategoryId = selectedCate
       icon: site.icon,
     }
     : createEmptySiteInput(fallbackCategoryId);
+  resetSiteMetadataState();
 }
 
 function applySelection(nextCategoryId?: number | null, nextSiteId?: number | null) {
@@ -254,6 +340,7 @@ function closeCategoryModal() {
 
 function closeSiteModal() {
   isSiteModalOpen.value = false;
+  clearPendingSiteMetadataLookup();
 }
 
 function startCreateCategory() {
@@ -310,6 +397,80 @@ function startEditSite(siteId = selectedSiteId.value) {
   isSiteModalOpen.value = true;
 }
 
+async function resolveSiteMetadataForUrl(rawUrl = siteDraft.value.url, force = false) {
+  const candidateUrl = rawUrl.trim();
+
+  if (!candidateUrl) {
+    resetSiteMetadataState();
+    return;
+  }
+
+  if (!force && candidateUrl === lastResolvedSiteUrl) {
+    return;
+  }
+
+  siteMetadataStatus.value = "loading";
+  siteMetadataMessage.value = "正在抓取站点信息…";
+
+  try {
+    const metadata = await resolveAdminSiteMetadata(candidateUrl);
+    const previousAutoFill = { ...siteAutofillSnapshot.value };
+
+    siteMetadata.value = metadata;
+    siteMetadataStatus.value = "success";
+    siteMetadataMessage.value = metadata.resolvedUrl && metadata.resolvedUrl !== metadata.url
+      ? `已解析并跟随到 ${new URL(metadata.resolvedUrl).hostname}`
+      : `已解析 ${new URL(metadata.url).hostname}`;
+    lastResolvedSiteUrl = metadata.url;
+
+    shouldSkipNextSiteLookup = true;
+    siteDraft.value.url = metadata.url;
+    siteDraft.value.icon = metadata.icon;
+
+    if (metadata.title && shouldApplyAutofill(siteDraft.value.title, previousAutoFill.title)) {
+      siteDraft.value.title = metadata.title;
+    }
+
+    if (metadata.subTitle && shouldApplyAutofill(siteDraft.value.subTitle, previousAutoFill.subTitle)) {
+      siteDraft.value.subTitle = metadata.subTitle;
+    }
+
+    if (metadata.displayLink && shouldApplyAutofill(siteDraft.value.displayLink, previousAutoFill.displayLink)) {
+      siteDraft.value.displayLink = metadata.displayLink;
+    }
+
+    siteAutofillSnapshot.value = {
+      title: metadata.title,
+      subTitle: metadata.subTitle,
+      displayLink: metadata.displayLink,
+      icon: metadata.icon,
+    };
+  } catch (error) {
+    siteMetadata.value = null;
+    siteMetadataStatus.value = "error";
+    siteMetadataMessage.value = error instanceof Error ? error.message : "站点信息解析失败。";
+    lastResolvedSiteUrl = "";
+  }
+}
+
+function scheduleSiteMetadataResolve(rawUrl = siteDraft.value.url) {
+  clearPendingSiteMetadataLookup();
+
+  const candidateUrl = rawUrl.trim();
+
+  if (!candidateUrl) {
+    resetSiteMetadataState();
+    return;
+  }
+
+  siteMetadataStatus.value = "idle";
+  siteMetadataMessage.value = "链接已更新，稍后自动重新解析。";
+  siteMetadataTimer = setTimeout(() => {
+    siteMetadataTimer = null;
+    void resolveSiteMetadataForUrl(candidateUrl);
+  }, 700);
+}
+
 async function submitCategory() {
   if (categoryFormIssues.value.length) {
     errorMessage.value = categoryFormIssues.value[0] ?? "分类表单不完整。";
@@ -353,10 +514,11 @@ async function submitSite() {
 
   busyKey.value = "save-site";
   clearFeedback();
+  const payload = createNormalizedSitePayload(siteDraft.value);
 
   try {
     if (siteMode.value === "create") {
-      const { site } = await createAdminSite(siteDraft.value);
+      const { site } = await createAdminSite(payload);
       await refreshAdminData({ categoryId: site.categoryId, siteId: site.id });
       closeSiteModal();
       notice.value = "站点已创建。";
@@ -367,7 +529,7 @@ async function submitSite() {
       throw new Error("请选择一个站点后再保存。");
     }
 
-    const { site } = await updateAdminSite(selectedSite.value.id, siteDraft.value);
+    const { site } = await updateAdminSite(selectedSite.value.id, payload);
     await refreshAdminData({ categoryId: site.categoryId, siteId: site.id });
     closeSiteModal();
     notice.value = "站点已更新。";
@@ -505,12 +667,29 @@ watch(isAnyModalOpen, (open) => {
   document.body.classList.toggle("admin-modal-open", open);
 });
 
+watch(
+  () => siteDraft.value.url,
+  (nextUrl, previousUrl) => {
+    if (!isSiteModalOpen.value || nextUrl === previousUrl) {
+      return;
+    }
+
+    if (shouldSkipNextSiteLookup) {
+      shouldSkipNextSiteLookup = false;
+      return;
+    }
+
+    scheduleSiteMetadataResolve(nextUrl);
+  },
+);
+
 onUnmounted(() => {
   if (typeof document === "undefined") {
     return;
   }
 
   document.body.classList.remove("admin-modal-open");
+  clearPendingSiteMetadataLookup();
 });
 </script>
 
@@ -544,10 +723,6 @@ onUnmounted(() => {
             <span class="admin-stat-card__label">当前用户</span>
             <strong>{{ session?.email ?? "加载中" }}</strong>
           </div>
-          <div class="admin-stat-card">
-            <span class="admin-stat-card__label">状态</span>
-            <strong>{{ pageStatus }}</strong>
-          </div>
         </div>
       </header>
 
@@ -571,12 +746,17 @@ onUnmounted(() => {
               <article
                 v-for="(category, categoryIndex) in categories"
                 :key="category.id"
-                class="admin-record"
+                class="admin-record admin-record--category"
                 :class="{ 'is-active': category.id === selectedCategoryId }"
               >
                 <button type="button" class="admin-record__main" @click="selectCategory(category.id)">
-                  <strong>{{ category.title }}</strong>
-                  <span>{{ category.sites.length }} 个站点</span>
+                  <div class="admin-record__thumb admin-record__thumb--category">
+                    <component :is="getCategoryIcon(category.icon)" :size="18" :stroke-width="2" />
+                  </div>
+                  <div class="admin-record__content">
+                    <strong>{{ category.title }}</strong>
+                    <span>{{ category.sites.length }} 个站点</span>
+                  </div>
                 </button>
                 <div class="admin-record__actions">
                   <button type="button" class="admin-mini-button" :disabled="isBusy() || categoryIndex === 0" @click="moveCategory(category.id, -1)">
@@ -622,7 +802,7 @@ onUnmounted(() => {
           </div>
 
           <div class="admin-section__body">
-            <div v-if="sitesInSelectedCategory.length" class="admin-record-list">
+            <div v-if="sitesInSelectedCategory.length" class="admin-record-list admin-record-list--sites">
               <article
                 v-for="(site, siteIndex) in sitesInSelectedCategory"
                 :key="site.id"
@@ -630,8 +810,20 @@ onUnmounted(() => {
                 :class="{ 'is-active': site.id === selectedSiteId }"
               >
                 <button type="button" class="admin-record__main" @click="selectSite(site.id)">
-                  <strong>{{ site.title }}</strong>
-                  <span>{{ site.displayLink }}</span>
+                  <img
+                    :src="getSiteIconUrl(site.icon)"
+                    class="admin-record__thumb admin-record__thumb--site"
+                    width="52"
+                    height="52"
+                    :alt="site.title"
+                    loading="lazy"
+                    decoding="async"
+                  />
+                  <div class="admin-record__content">
+                    <strong>{{ site.title }}</strong>
+                    <p class="admin-record__description">{{ site.subTitle }}</p>
+                    <span>{{ site.displayLink || site.url }}</span>
+                  </div>
                 </button>
                 <div class="admin-record__actions">
                   <button type="button" class="admin-mini-button" :disabled="isBusy() || siteIndex === 0" @click="moveSite(site.id, -1)">
@@ -685,10 +877,43 @@ onUnmounted(() => {
                 <span>名称</span>
                 <input v-model="categoryDraft.title" type="text" placeholder="例如：大前端" />
               </label>
-              <label class="admin-field">
+              <div class="admin-field admin-field--full">
                 <span>图标</span>
-                <input v-model="categoryDraft.icon" type="text" placeholder="例如：frontend" />
-              </label>
+                <div class="admin-category-icon-picker">
+                  <div
+                    class="admin-category-icon-preview"
+                    :class="{ 'is-unlisted': !isCategoryIconPreset }"
+                  >
+                    <div class="admin-category-icon-preview__swatch">
+                      <component :is="getCategoryIcon(categoryDraft.icon)" :size="28" :stroke-width="2.2" />
+                    </div>
+                    <div class="admin-category-icon-preview__content">
+                      <strong>{{ activeCategoryIconOption?.label ?? "当前图标" }}</strong>
+                      <span>
+                        {{ isCategoryIconPreset ? "已选常用图标，点击下方即可切换。" : "当前图标不在预置列表，建议切换为下方常用图标。" }}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div class="admin-category-icon-grid" role="list" aria-label="分类图标预置">
+                    <button
+                      v-for="option in categoryIconOptions"
+                      :key="option.key"
+                      type="button"
+                      class="admin-category-icon-option"
+                      :class="{ 'is-active': categoryDraft.icon === option.key }"
+                      :aria-pressed="categoryDraft.icon === option.key ? 'true' : 'false'"
+                      :disabled="isBusy()"
+                      @click="selectCategoryIcon(option.key)"
+                    >
+                      <span class="admin-category-icon-option__glyph">
+                        <component :is="getCategoryIcon(option.key)" :size="20" :stroke-width="2.1" />
+                      </span>
+                      <span class="admin-category-icon-option__label">{{ option.label }}</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
             </div>
 
             <div class="admin-modal__actions">
@@ -730,6 +955,50 @@ onUnmounted(() => {
             </div>
 
             <div class="admin-form-grid">
+              <label class="admin-field admin-field--full admin-site-link-field">
+                <span>跳转链接</span>
+                <div class="admin-site-link-input-row">
+                  <input
+                    v-model="siteDraft.url"
+                    type="text"
+                    inputmode="url"
+                    autocomplete="off"
+                    placeholder="https://example.com"
+                  />
+                  <button
+                    type="button"
+                    class="admin-button"
+                    :disabled="isBusy() || siteMetadataStatus === 'loading' || !siteDraft.url.trim()"
+                    @click="resolveSiteMetadataForUrl(siteDraft.url, true)"
+                  >
+                    {{ siteMetadataStatus === "loading" ? "解析中" : "重新解析" }}
+                  </button>
+                </div>
+                <small class="admin-field__hint">输入后自动解析标题、简介和图标，保存时默认作为展示链接。</small>
+              </label>
+
+              <div class="admin-site-preview">
+                <div class="admin-site-preview__icon">
+                  <img :src="siteIconPreviewUrl" :alt="sitePreviewTitle" width="72" height="72" />
+                </div>
+                <div class="admin-site-preview__content">
+                  <div class="admin-site-preview__eyebrow">站点卡片预览</div>
+                  <strong>{{ sitePreviewTitle }}</strong>
+                  <p>{{ sitePreviewSubTitle }}</p>
+                  <span>{{ sitePreviewDisplayLink }}</span>
+                </div>
+              </div>
+
+              <div
+                class="admin-site-lookup-status"
+                :class="{
+                  'is-loading': siteMetadataStatus === 'loading',
+                  'is-error': siteMetadataStatus === 'error',
+                }"
+              >
+                {{ siteMetadataStatusText }}
+              </div>
+
               <label class="admin-field">
                 <span>所属分类</span>
                 <select v-model.number="siteDraft.categoryId" :disabled="isBusy() || !categories.length">
@@ -740,24 +1009,21 @@ onUnmounted(() => {
                 </select>
               </label>
               <label class="admin-field">
-                <span>图标</span>
-                <input v-model="siteDraft.icon" type="text" placeholder="例如：github.svg" />
-              </label>
-              <label class="admin-field">
                 <span>标题</span>
                 <input v-model="siteDraft.title" type="text" />
               </label>
               <label class="admin-field">
-                <span>展示链接</span>
-                <input v-model="siteDraft.displayLink" type="url" />
+                <span>展示链接（选填）</span>
+                <input
+                  v-model="siteDraft.displayLink"
+                  type="text"
+                  inputmode="url"
+                  placeholder="留空则默认与跳转链接一致"
+                />
               </label>
               <label class="admin-field admin-field--full">
                 <span>副标题</span>
                 <textarea v-model="siteDraft.subTitle" rows="3"></textarea>
-              </label>
-              <label class="admin-field admin-field--full">
-                <span>跳转 URL</span>
-                <input v-model="siteDraft.url" type="url" />
               </label>
             </div>
 

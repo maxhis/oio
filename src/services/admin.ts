@@ -44,6 +44,16 @@ export interface SiteInput {
   icon: string;
 }
 
+export interface ResolvedSiteMetadata {
+  title: string;
+  subTitle: string;
+  displayLink: string;
+  url: string;
+  resolvedUrl: string;
+  icon: string;
+  iconUrl: string;
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`${API_BASE_URL}${path}`, {
     ...init,
@@ -73,7 +83,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 export function createEmptyCategoryInput(): CategoryInput {
   return {
     title: "",
-    icon: "folder",
+    icon: "featured",
   };
 }
 
@@ -82,10 +92,20 @@ export function createEmptySiteInput(categoryId = 0): SiteInput {
     categoryId,
     title: "",
     subTitle: "",
-    displayLink: "https://",
-    url: "https://",
+    displayLink: "",
+    url: "",
     icon: "default.png",
   };
+}
+
+export function buildAdminIconUrl(icon: string): string {
+  const sanitized = icon.startsWith("logos/") ? icon : `logos/${icon}`;
+  const encodedPath = sanitized
+    .split("/")
+    .map((segment) => encodeURIComponent(segment))
+    .join("/");
+
+  return `${API_BASE_URL}/api/assets/${encodedPath}`;
 }
 
 export async function loadAdminSession(): Promise<AdminSession> {
@@ -165,5 +185,15 @@ export async function reorderAdminSites(categoryId: number, siteIds: number[]): 
       "content-type": "application/json",
     },
     body: JSON.stringify({ categoryId, siteIds }),
+  });
+}
+
+export async function resolveAdminSiteMetadata(url: string): Promise<ResolvedSiteMetadata> {
+  return request<ResolvedSiteMetadata>("/api/admin/sites/resolve", {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({ url }),
   });
 }

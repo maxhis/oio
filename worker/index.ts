@@ -1,3 +1,4 @@
+import { load } from "cheerio";
 import { navigationCategories, type Category } from "../src/data/navigation";
 
 interface D1PreparedStatementLike {
@@ -84,8 +85,20 @@ interface AdminIdentity {
   source: "cloudflare-access" | "local-dev";
 }
 
+interface ResolvedSiteMetadata {
+  title: string;
+  subTitle: string;
+  displayLink: string;
+  url: string;
+  resolvedUrl: string;
+  icon: string;
+  iconUrl: string;
+}
+
 const LONG_CACHE_CONTROL = "public, max-age=31536000, immutable";
 const NAVIGATION_CACHE_CONTROL = "public, max-age=300, stale-while-revalidate=3600";
+const SITE_LOOKUP_USER_AGENT =
+  "Mozilla/5.0 (compatible; oio-site-metadata/1.0; +https://oio.15tar.com)";
 
 function json(data: unknown, init?: ResponseInit): Response {
   return new Response(JSON.stringify(data), {
@@ -123,6 +136,338 @@ function buildApiIconUrl(icon: string): string {
     .split("/")
     .map((segment) => encodeURIComponent(segment))
     .join("/")}`;
+}
+
+function collapseWhitespace(value: string): string {
+  return value.replace(/\s+/g, " ").trim();
+}
+
+function normalizeOptionalString(value: unknown): string {
+  return typeof value === "string" ? collapseWhitespace(value.trim()) : "";
+}
+
+function normalizeExternalUrl(value: unknown): string {
+  const raw = typeof value === "string" ? value.trim() : "";
+
+  if (!raw) {
+    return "";
+  }
+
+  const candidate = /^[a-zA-Z][a-zA-Z\d+\-.]*:/.test(raw) ? raw : `https://${raw}`;
+
+  let parsedUrl: URL;
+
+  try {
+    parsedUrl = new URL(candidate);
+  } catch {
+    throw new Error("Site url must be a valid http or https URL.");
+  }
+
+  if (parsedUrl.protocol !== "http:" && parsedUrl.protocol !== "https:") {
+    throw new Error("Site url must use http or https.");
+  }
+
+  return parsedUrl.toString();
+}
+
+function sanitizeKeySegment(value: string): string {
+  const sanitized = value
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+
+  return sanitized || "site";
+}
+
+function inferExtensionFromUrl(url: string): string {
+  try {
+    const pathname = new URL(url).pathname.toLowerCase();
+    const matched = pathname.match(/\.(svg|png|jpe?g|webp|ico|gif|avif)$/);
+    return matched?.[1] === "jpeg" ? "jpg" : matched?.[1] ?? "";
+  } catch {
+    return "";
+  }
+}
+
+function inferExtensionFromContentType(contentType: string | null): string {
+  const normalizedType = contentType?.toLowerCase() ?? "";
+
+  if (normalizedType.includes("svg")) {
+    return "svg";
+  }
+
+  if (normalizedType.includes("png")) {
+    return "png";
+  }
+
+  if (normalizedType.includes("jpeg") || normalizedType.includes("jpg")) {
+    return "jpg";
+  }
+
+  if (normalizedType.includes("webp")) {
+    return "webp";
+  }
+
+  if (normalizedType.includes("icon")) {
+    return "ico";
+  }
+
+  if (normalizedType.includes("gif")) {
+    return "gif";
+  }
+
+  if (normalizedType.includes("avif")) {
+    return "avif";
+  }
+
+  return "";
+}
+
+function resolveContentType(contentType: string | null, url: string, key: string): string {
+  const normalizedType = contentType?.split(";")[0]?.trim().toLowerCase() ?? "";
+
+  if (normalizedType) {
+    return normalizedType;
+  }
+
+  return guessContentType(inferExtensionFromUrl(url) ? `${key}.${inferExtensionFromUrl(url)}` : key);
+}
+
+function createAbsoluteUrl(candidate: string, baseUrl: string): string {
+  return new URL(candidate, baseUrl).toString();
+}
+
+function extractHostname(url: string): string {
+  try {
+    return new URL(url).hostname;
+  } catch {
+    return "";
+  }
+}
+
+function toHex(buffer: ArrayBuffer): string {
+  return Array.from(new Uint8Array(buffer))
+    .map((value) => value.toString(16).padStart(2, "0"))
+    .join("");
+}
+
+async function sha1Hex(buffer: ArrayBuffer): Promise<string> {
+  const hashBuffer = await crypto.subtle.digest("SHA-1", buffer);
+  return toHex(hashBuffer);
+}
+
+function readMetaContent(
+  $: ReturnType<typeof load>,
+  attribute: "name" | "property",
+  acceptedValues: string[],
+): string {
+  const accepted = new Set(acceptedValues.map((value) => value.toLowerCase()));
+
+  for (const element of $("meta").toArray()) {
+    const currentValue = $(element).attr(attribute)?.trim().toLowerCase();
+
+    if (!currentValue || !accepted.has(currentValue)) {
+      continue;
+    }
+
+    const content = collapseWhitespace($(element).attr("content")?.trim() ?? "");
+
+    if (content) {
+      return content;
+    }
+  }
+
+  return "";
+}
+
+function extractDocumentMetadata(html: string): { title: string; subTitle: string; iconCandidates: string[] } {
+  const $ = load(html);
+  const title = readMetaContent($, "property", ["og:title"])
+    || readMetaContent($, "name", ["twitter:title"])
+    || collapseWhitespace($("title").first().text());
+  const subTitle = readMetaContent($, "property", ["og:description"])
+    || readMetaContent($, "name", ["description", "twitter:description"]);
+  const iconCandidates: Array<{ href: string; score: number }> = [];
+
+  for (const element of $("link").toArray()) {
+    const relTokens = ($(element).attr("rel") ?? "")
+      .toLowerCase()
+      .split(/\s+/)
+      .filter(Boolean);
+    const href = $(element).attr("href")?.trim() ?? "";
+
+    if (!href) {
+      continue;
+    }
+
+    let score = 0;
+
+    if (relTokens.includes("apple-touch-icon")) {
+      score += 80;
+    }
+
+    if (relTokens.includes("icon")) {
+      score += 60;
+    }
+
+    if (relTokens.includes("shortcut")) {
+      score += 8;
+    }
+
+    if (!score) {
+      continue;
+    }
+
+    const sizesValue = $(element).attr("sizes")?.trim() ?? "";
+    const numericSizes = sizesValue
+      .split(/\s+/)
+      .map((size) => {
+        const matched = size.match(/^(\d+)x(\d+)$/i);
+        return matched ? Math.max(Number.parseInt(matched[1], 10), Number.parseInt(matched[2], 10)) : 0;
+      })
+      .filter((size) => Number.isFinite(size) && size > 0);
+
+    score += numericSizes.length > 0 ? Math.min(Math.max(...numericSizes), 512) : 16;
+
+    if (href.toLowerCase().includes(".svg")) {
+      score += 12;
+    }
+
+    iconCandidates.push({ href, score });
+  }
+
+  const fallbackImages = [
+    readMetaContent($, "property", ["og:image"]),
+    readMetaContent($, "name", ["twitter:image"]),
+  ].filter(Boolean);
+
+  return {
+    title,
+    subTitle,
+    iconCandidates: [
+      ...iconCandidates
+        .sort((left, right) => right.score - left.score)
+        .map((candidate) => candidate.href),
+      ...fallbackImages,
+    ],
+  };
+}
+
+async function cacheSiteIcon(
+  env: Env,
+  siteUrl: string,
+  candidateUrls: string[],
+): Promise<{ icon: string; iconUrl: string } | null> {
+  const attemptedUrls = Array.from(new Set([
+    ...candidateUrls,
+    createAbsoluteUrl("/favicon.ico", siteUrl),
+  ]));
+  const siteHost = sanitizeKeySegment(extractHostname(siteUrl));
+
+  for (const candidateUrl of attemptedUrls) {
+    let response: Response;
+
+    try {
+      response = await fetch(candidateUrl, {
+        redirect: "follow",
+        headers: {
+          Accept: "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
+          "User-Agent": SITE_LOOKUP_USER_AGENT,
+        },
+      });
+    } catch {
+      continue;
+    }
+
+    if (!response.ok) {
+      continue;
+    }
+
+    const contentLength = Number.parseInt(response.headers.get("content-length") ?? "", 10);
+
+    if (Number.isFinite(contentLength) && contentLength > 2_500_000) {
+      continue;
+    }
+
+    const body = await response.arrayBuffer();
+
+    if (body.byteLength === 0) {
+      continue;
+    }
+
+    const extension = inferExtensionFromContentType(response.headers.get("content-type"))
+      || inferExtensionFromUrl(response.url)
+      || inferExtensionFromUrl(candidateUrl)
+      || "png";
+    const bodyHash = await sha1Hex(body);
+    const objectKey = `logos/autofetch/${siteHost}-${bodyHash.slice(0, 20)}.${extension}`;
+    const contentType = resolveContentType(response.headers.get("content-type"), response.url, objectKey);
+
+    await env.LOGOS.put(objectKey, body, {
+      httpMetadata: {
+        contentType,
+        cacheControl: LONG_CACHE_CONTROL,
+      },
+    });
+
+    const icon = toClientIconValue(objectKey);
+
+    return {
+      icon,
+      iconUrl: buildApiIconUrl(icon),
+    };
+  }
+
+  return null;
+}
+
+async function resolveSiteMetadata(env: Env, rawUrl: string): Promise<ResolvedSiteMetadata> {
+  const normalizedUrl = normalizeExternalUrl(rawUrl);
+
+  const response = await fetch(normalizedUrl, {
+    redirect: "follow",
+    headers: {
+      Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+      "User-Agent": SITE_LOOKUP_USER_AGENT,
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to fetch site metadata with status ${response.status}.`);
+  }
+
+  const html = await response.text();
+
+  if (!html.trim()) {
+    throw new Error("The target site returned an empty response.");
+  }
+
+  const resolvedUrl = response.url || normalizedUrl;
+  const extracted = extractDocumentMetadata(html);
+  const resolvedIconCandidates = extracted.iconCandidates
+    .map((candidate) => {
+      try {
+        return createAbsoluteUrl(candidate, resolvedUrl);
+      } catch {
+        return "";
+      }
+    })
+    .filter(Boolean);
+  const cachedIcon = await cacheSiteIcon(
+    env,
+    resolvedUrl,
+    resolvedIconCandidates,
+  );
+
+  return {
+    title: extracted.title,
+    subTitle: extracted.subTitle,
+    displayLink: normalizedUrl,
+    url: normalizedUrl,
+    resolvedUrl,
+    icon: cachedIcon?.icon ?? "default.png",
+    iconUrl: cachedIcon?.iconUrl ?? buildApiIconUrl("default.png"),
+  };
 }
 
 function stripRuntimeFields(categories: Category[]): Category[] {
@@ -189,18 +534,18 @@ function normalizeSiteFields(
   const categoryId = typeof value.categoryId === "number" && Number.isInteger(value.categoryId)
     ? value.categoryId
     : Number.NaN;
-  const title = typeof value.title === "string" ? value.title.trim() : "";
-  const subTitle = typeof value.subTitle === "string" ? value.subTitle.trim() : "";
-  const displayLink = typeof value.displayLink === "string" ? value.displayLink.trim() : "";
-  const url = typeof value.url === "string" ? value.url.trim() : "";
-  const icon = typeof value.icon === "string" ? value.icon.trim() : "";
+  const title = normalizeOptionalString(value.title);
+  const subTitle = normalizeOptionalString(value.subTitle);
+  const url = normalizeExternalUrl(value.url);
+  const displayLink = normalizeOptionalString(value.displayLink) || url;
+  const icon = normalizeOptionalString(value.icon);
 
   if (!Number.isInteger(categoryId) || categoryId <= 0) {
     throw new Error("Site categoryId is required.");
   }
 
-  if (!title || !subTitle || !displayLink || !url || !icon) {
-    throw new Error("Site title, subTitle, displayLink, url and icon are required.");
+  if (!title || !subTitle || !url || !icon) {
+    throw new Error("Site title, subTitle, url and icon are required.");
   }
 
   return {
@@ -1217,6 +1562,37 @@ async function handleAdminSitesRequest(request: Request, env: Env): Promise<Resp
   }
 }
 
+async function handleAdminSiteResolveRequest(request: Request, env: Env): Promise<Response> {
+  const identity = getAdminIdentity(request, env);
+
+  if (!identity) {
+    return unauthorizedJson();
+  }
+
+  if (request.method !== "POST") {
+    return new Response("Method Not Allowed", {
+      status: 405,
+      headers: {
+        Allow: "POST",
+      },
+    });
+  }
+
+  try {
+    const body = await parseJsonBody(request);
+    const siteUrl = isRecord(body) ? body.url : undefined;
+    const metadata = await resolveSiteMetadata(env, typeof siteUrl === "string" ? siteUrl : "");
+
+    return json(metadata, {
+      headers: {
+        "cache-control": "private, no-store",
+      },
+    });
+  } catch (error) {
+    return badRequest(error instanceof Error ? error.message : "Failed to resolve site metadata.");
+  }
+}
+
 async function handleAdminSiteDetailRequest(request: Request, env: Env, siteId: number): Promise<Response> {
   const identity = getAdminIdentity(request, env);
 
@@ -1397,6 +1773,10 @@ const worker = {
 
     if (url.pathname === "/api/admin/sites") {
       return handleAdminSitesRequest(request, env);
+    }
+
+    if (url.pathname === "/api/admin/sites/resolve") {
+      return handleAdminSiteResolveRequest(request, env);
     }
 
     if (url.pathname === "/api/admin/sites/reorder") {
