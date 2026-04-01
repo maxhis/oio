@@ -15,7 +15,7 @@ export interface Category {
 export const navigationCategories: Category[] = [
   {
     title: "常用推荐",
-    icon: "linecons-star",
+    icon: "featured",
     sites: [
       {
         title: "Google",
@@ -77,7 +77,7 @@ export const navigationCategories: Category[] = [
   },
   {
     title: "大前端",
-    icon: "linecons-mobile",
+    icon: "frontend",
     sites: [
       {
         title: "iTunes Connect",
@@ -146,7 +146,7 @@ export const navigationCategories: Category[] = [
   },
   {
     title: "大后端",
-    icon: "linecons-desktop",
+    icon: "backend",
     sites: [
       {
         title: "Dokku",
@@ -201,7 +201,7 @@ export const navigationCategories: Category[] = [
   },
   {
     title: "技术博客",
-    icon: "linecons-note",
+    icon: "blog",
     sites: [
       {
         title: "美团技术团队",
@@ -235,7 +235,7 @@ export const navigationCategories: Category[] = [
   },
   {
     title: "发现产品",
-    icon: "linecons-lightbulb",
+    icon: "discovery",
     sites: [
       {
         title: "Hacker News",
@@ -255,7 +255,7 @@ export const navigationCategories: Category[] = [
   },
   {
     title: "在线学习",
-    icon: "linecons-pencil",
+    icon: "learning",
     sites: [
       {
         title: "Udemy",
@@ -317,7 +317,7 @@ export const navigationCategories: Category[] = [
   },
   {
     title: "推荐工具",
-    icon: "linecons-diamond",
+    icon: "tools",
     sites: [
       {
         title: "JSON Editor",
@@ -505,7 +505,7 @@ export const navigationCategories: Category[] = [
   },
   {
     title: "生存必备",
-    icon: "linecons-globe",
+    icon: "essentials",
     sites: [
       {
         title: "Just My Socks",

@@ -2,6 +2,8 @@
 import { computed } from "vue";
 import { RouterLink } from "vue-router";
 
+import { uiIcons } from "../icons";
+
 const props = withDefaults(
   defineProps<{
     fixed?: boolean;
@@ -17,11 +19,11 @@ const copyrightText = computed(() => {
 });
 
 const footerClass = computed(() => [
-  "main-footer",
-  "sticky",
-  "footer-type-1",
+  "site-footer",
   { fixed: props.fixed },
 ]);
+
+const ChevronUpIcon = uiIcons.chevronUp;
 
 function scrollToTop(event: Event) {
   event.preventDefault();
@@ -31,18 +33,18 @@ function scrollToTop(event: Event) {
 
 <template>
   <footer :class="footerClass">
-    <div class="footer-inner">
-      <div class="footer-text">
+    <div class="site-footer__inner">
+      <div class="site-footer__text">
         {{ copyrightText }}
         <RouterLink to="/"><strong>oio.dev</strong></RouterLink>
-        created by
+        by
         <a href="https://go.oio.dev/blog" target="_blank" rel="noreferrer">
           <strong>iStar</strong>
         </a>
       </div>
-      <div class="go-up">
-        <a href="#" rel="go-top" @click="scrollToTop">
-          <i class="fa-angle-up"></i>
+      <div class="site-footer__top">
+        <a href="#" rel="go-top" @click="scrollToTop" aria-label="回到顶部">
+          <ChevronUpIcon :size="18" :stroke-width="2.2" />
         </a>
       </div>
     </div>

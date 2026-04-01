@@ -7,28 +7,28 @@ defineProps<{
 </script>
 
 <template>
-  <div class="col-sm-3 col-xs-12">
+  <article class="site-card">
     <a
-      class="xe-widget xe-conversations box2"
+      class="site-card__link"
       :href="site.url"
       target="_blank"
       rel="noreferrer"
       :title="site.displayLink"
     >
-      <div class="xe-comment-entry">
+      <div class="site-card__icon-wrap">
         <img
           :src="`/assets/images/logos/${site.icon}`"
-          class="img-circle"
-          width="40"
+          class="site-card__icon"
+          width="44"
+          height="44"
           :alt="site.title"
         />
-        <div class="xe-comment">
-          <div class="xe-user-name overflowClip_1">
-            <strong>{{ site.title }}</strong>
-          </div>
-          <p class="overflowClip_2">{{ site.subTitle }}</p>
-        </div>
+      </div>
+      <div class="site-card__body">
+        <div class="site-card__title">{{ site.title }}</div>
+        <p class="site-card__desc">{{ site.subTitle }}</p>
+        <div class="site-card__meta">{{ site.displayLink }}</div>
       </div>
     </a>
-  </div>
+  </article>
 </template>

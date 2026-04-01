@@ -4,15 +4,11 @@ import { RouterLink } from "vue-router";
 
 <template>
   <div class="not-found-page">
-    <section id="about" class="not-found-panel animated bounce-in">
-      <div class="bg-align">
-        <h1>404</h1>
-        <p>Oops! It looks like you're lost...</p>
-        <p>The page you're looking for doesn't exist or another error occurred.</p>
-        <p>
-          <RouterLink to="/">👉 oio.dev</RouterLink>
-        </p>
-      </div>
+    <section class="not-found-panel">
+      <p class="not-found-panel__eyebrow">404</p>
+      <h1>这一页没有被收录。</h1>
+      <p>你访问的地址不存在，或者这条路径已经被新的站点结构替换。</p>
+      <RouterLink to="/" class="not-found-panel__link">返回首页继续浏览</RouterLink>
     </section>
   </div>
 </template>

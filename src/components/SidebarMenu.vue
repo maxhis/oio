@@ -1,9 +1,11 @@
 <script setup lang="ts">
+import { computed } from "vue";
 import { RouterLink } from "vue-router";
 
+import { categoryIcons, uiIcons } from "../icons";
 import type { Category } from "../data/navigation";
 
-defineProps<{
+const props = defineProps<{
   categories: Category[];
   activeCategory: string;
   isCollapsed: boolean;
@@ -15,70 +17,94 @@ const emit = defineEmits<{
   (event: "toggleMobileMenu"): void;
   (event: "selectCategory", title: string): void;
 }>();
+
+const MenuIcon = uiIcons.menu;
+const CloseIcon = uiIcons.close;
+const HeartIcon = uiIcons.heart;
+const MailIcon = uiIcons.mail;
+
+function getCategoryIcon(icon: string) {
+  return categoryIcons[icon] ?? categoryIcons.featured;
+}
+
+const sidebarBrandSrc = computed(() =>
+  props.isCollapsed
+    ? "/assets/images/logo-collapsed@2x.png"
+    : "/assets/images/logo@2x.svg",
+);
 </script>
 
 <template>
   <aside
-    class="sidebar-menu toggle-others fixed"
-    :class="{ collapsed: isCollapsed }"
+    class="site-sidebar"
+    :class="{
+      'site-sidebar--collapsed': isCollapsed,
+      'site-sidebar--open': isMobileVisible,
+    }"
   >
-    <div class="sidebar-menu-inner">
-      <header class="logo-env">
-        <div class="logo">
-          <RouterLink to="/" class="logo-expanded">
-            <img :src="'/assets/images/logo@2x.svg'" width="100%" alt="oio.dev" />
-          </RouterLink>
-          <RouterLink to="/" class="logo-collapsed">
-            <img
-              :src="'/assets/images/logo-collapsed@2x.png'"
-              width="40"
-              alt="oio.dev"
-            />
-          </RouterLink>
-        </div>
-        <div class="mobile-menu-toggle visible-xs">
-          <a href="#" @click.prevent="emit('toggleMobileMenu')">
-            <i class="fa-bars"></i>
-          </a>
-        </div>
-      </header>
+    <header class="site-sidebar__header">
+      <RouterLink to="/" class="site-brand">
+        <img
+          :src="sidebarBrandSrc"
+          :class="{ 'site-brand__mark': isCollapsed, 'site-brand__logo': !isCollapsed }"
+          alt="oio.dev"
+        />
+        <span v-if="!isCollapsed" class="site-brand__text">
+          开发者网址导航
+        </span>
+      </RouterLink>
 
-      <ul
-        id="main-menu"
-        class="main-menu"
-        :class="{ 'mobile-is-visible': isMobileVisible }"
-      >
-        <li
-          v-for="category in categories"
-          :key="category.title"
-          :class="{ active: activeCategory === category.title }"
+      <div class="site-sidebar__actions">
+        <button
+          type="button"
+          class="site-sidebar__toggle site-sidebar__toggle--desktop"
+          @click="emit('toggleSidebar')"
+          aria-label="切换侧边栏"
         >
-          <a
-            :href="`#${category.title}`"
-            class="smooth"
-            @click.prevent="emit('selectCategory', category.title)"
-          >
-            <i :class="category.icon"></i>
-            <span class="title">{{ category.title }}</span>
-          </a>
-        </li>
-      </ul>
+          <MenuIcon :size="18" :stroke-width="2.1" />
+        </button>
+        <button
+          type="button"
+          class="site-sidebar__toggle site-sidebar__toggle--mobile"
+          @click="emit('toggleMobileMenu')"
+          aria-label="关闭菜单"
+        >
+          <CloseIcon :size="18" :stroke-width="2.1" />
+        </button>
+      </div>
+    </header>
 
-      <ul class="main-menu" :class="{ 'mobile-is-visible': isMobileVisible }">
-        <li>
-          <RouterLink to="/about">
-            <i class="linecons-heart"></i>
-            <span class="tooltip-blue">关于本站</span>
-          </RouterLink>
-        </li>
-        <li>
-          <a href="mailto:mail.oio.dev@gmail.com">
-            <i class="linecons-mail"></i>
-            <span class="tooltip-blue">我要投稿</span>
-            <span class="label label-primary pull-right hidden-collapsed">♥︎</span>
-          </a>
-        </li>
-      </ul>
+    <div class="site-sidebar__intro" v-if="!isCollapsed">
+      <p class="site-sidebar__kicker">oio.dev</p>
+      <p class="site-sidebar__blurb">
+        收集经常回访、值得长期保存的开发资源，把书签整理成真正可浏览的索引。
+      </p>
+    </div>
+
+    <nav class="site-sidebar__nav" aria-label="分类导航">
+      <button
+        v-for="category in categories"
+        :key="category.title"
+        type="button"
+        class="site-sidebar__link"
+        :class="{ 'is-active': activeCategory === category.title }"
+        :aria-current="activeCategory === category.title ? 'true' : undefined"
+        @click="emit('selectCategory', category.title)"
+      >
+        <component :is="getCategoryIcon(category.icon)" :size="18" :stroke-width="2" />
+        <span class="site-sidebar__label">{{ category.title }}</span>
+      </button>
+    </nav>
+
+    <div class="site-sidebar__footer">
+      <RouterLink to="/about" class="site-sidebar__secondary-link">
+        <HeartIcon :size="18" :stroke-width="2" />
+        <span class="site-sidebar__label">关于本站</span>
+      </RouterLink>
+      <a href="mailto:mail.oio.dev@gmail.com" class="site-sidebar__secondary-link">
+        <MailIcon :size="18" :stroke-width="2" />
+        <span class="site-sidebar__label">我要投稿</span>
+      </a>
     </div>
   </aside>
 </template>
