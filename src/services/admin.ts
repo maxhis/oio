@@ -1,5 +1,3 @@
-import type { Category } from "../data/navigation";
-
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? "").replace(/\/$/, "");
 
 export interface AdminSession {
@@ -7,9 +5,43 @@ export interface AdminSession {
   source: string;
 }
 
+export interface AdminSite {
+  id: number;
+  categoryId: number;
+  title: string;
+  subTitle: string;
+  displayLink: string;
+  url: string;
+  icon: string;
+  sortOrder: number;
+}
+
+export interface AdminCategory {
+  id: number;
+  title: string;
+  icon: string;
+  sortOrder: number;
+  sites: AdminSite[];
+}
+
 export interface AdminNavigationResponse {
-  categories: Category[];
+  categories: AdminCategory[];
   source: string;
+  editor?: string;
+}
+
+export interface CategoryInput {
+  title: string;
+  icon: string;
+}
+
+export interface SiteInput {
+  categoryId: number;
+  title: string;
+  subTitle: string;
+  displayLink: string;
+  url: string;
+  icon: string;
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -22,25 +54,38 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   });
 
   if (!response.ok) {
-    const message = await response.text();
-    throw new Error(message || `Request failed with status ${response.status}`);
+    let message = `Request failed with status ${response.status}`;
+
+    try {
+      const payload = await response.json() as { error?: string };
+      message = payload.error || message;
+    } catch {
+      const text = await response.text();
+      message = text || message;
+    }
+
+    throw new Error(message);
   }
 
   return response.json() as Promise<T>;
 }
 
-export function stripRuntimeFields(categories: Category[]): Category[] {
-  return categories.map((category) => ({
-    title: category.title,
-    icon: category.icon,
-    sites: category.sites.map((site) => ({
-      title: site.title,
-      subTitle: site.subTitle,
-      displayLink: site.displayLink,
-      url: site.url,
-      icon: site.icon,
-    })),
-  }));
+export function createEmptyCategoryInput(): CategoryInput {
+  return {
+    title: "",
+    icon: "folder",
+  };
+}
+
+export function createEmptySiteInput(categoryId = 0): SiteInput {
+  return {
+    categoryId,
+    title: "",
+    subTitle: "",
+    displayLink: "https://",
+    url: "https://",
+    icon: "default.png",
+  };
 }
 
 export async function loadAdminSession(): Promise<AdminSession> {
@@ -48,27 +93,77 @@ export async function loadAdminSession(): Promise<AdminSession> {
 }
 
 export async function loadAdminNavigation(): Promise<AdminNavigationResponse> {
-  const payload = await request<AdminNavigationResponse>("/api/admin/navigation");
-
-  return {
-    ...payload,
-    categories: stripRuntimeFields(payload.categories),
-  };
+  return request<AdminNavigationResponse>("/api/admin/navigation");
 }
 
-export async function saveAdminNavigation(categories: Category[]): Promise<AdminNavigationResponse> {
-  const payload = await request<AdminNavigationResponse>("/api/admin/navigation", {
-    method: "PUT",
+export async function createAdminCategory(input: CategoryInput): Promise<{ category: AdminCategory }> {
+  return request<{ category: AdminCategory }>("/api/admin/categories", {
+    method: "POST",
     headers: {
       "content-type": "application/json",
     },
-    body: JSON.stringify({
-      categories: stripRuntimeFields(categories),
-    }),
+    body: JSON.stringify(input),
   });
+}
 
-  return {
-    ...payload,
-    categories: stripRuntimeFields(payload.categories),
-  };
+export async function updateAdminCategory(categoryId: number, input: CategoryInput): Promise<{ category: AdminCategory }> {
+  return request<{ category: AdminCategory }>(`/api/admin/categories/${categoryId}`, {
+    method: "PATCH",
+    headers: {
+      "content-type": "application/json",
+    },
+    body: JSON.stringify(input),
+  });
+}
+
+export async function deleteAdminCategory(categoryId: number): Promise<{ deletedId: number }> {
+  return request<{ deletedId: number }>(`/api/admin/categories/${categoryId}`, {
+    method: "DELETE",
+  });
+}
+
+export async function reorderAdminCategories(categoryIds: number[]): Promise<{ categoryIds: number[] }> {
+  return request<{ categoryIds: number[] }>("/api/admin/categories/reorder", {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({ categoryIds }),
+  });
+}
+
+export async function createAdminSite(input: SiteInput): Promise<{ site: AdminSite }> {
+  return request<{ site: AdminSite }>("/api/admin/sites", {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+    },
+    body: JSON.stringify(input),
+  });
+}
+
+export async function updateAdminSite(siteId: number, input: SiteInput): Promise<{ site: AdminSite }> {
+  return request<{ site: AdminSite }>(`/api/admin/sites/${siteId}`, {
+    method: "PATCH",
+    headers: {
+      "content-type": "application/json",
+    },
+    body: JSON.stringify(input),
+  });
+}
+
+export async function deleteAdminSite(siteId: number): Promise<{ deletedId: number }> {
+  return request<{ deletedId: number }>(`/api/admin/sites/${siteId}`, {
+    method: "DELETE",
+  });
+}
+
+export async function reorderAdminSites(categoryId: number, siteIds: number[]): Promise<{ categoryId: number; siteIds: number[] }> {
+  return request<{ categoryId: number; siteIds: number[] }>("/api/admin/sites/reorder", {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({ categoryId, siteIds }),
+  });
 }
