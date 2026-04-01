@@ -242,11 +242,6 @@ function isAdminAppPath(pathname: string): boolean {
   return pathname === "/admin" || pathname.startsWith("/admin/");
 }
 
-async function serveAdminAppShell(request: Request, env: Env): Promise<Response> {
-  const indexUrl = new URL("/index.html", request.url);
-  return env.ASSETS.fetch(new Request(indexUrl.toString(), request));
-}
-
 async function seedNavigationIfEmpty(env: Env): Promise<boolean> {
   const categoryCount = await env.DB
     .prepare("SELECT COUNT(*) AS count FROM categories")
@@ -641,7 +636,7 @@ const worker = {
         });
       }
 
-      return serveAdminAppShell(request, env);
+      return env.ASSETS.fetch(request);
     }
 
     return env.ASSETS.fetch(request);

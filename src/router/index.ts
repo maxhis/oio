@@ -70,10 +70,6 @@ const router = createRouter({
       meta: adminMeta,
     },
     {
-      path: "/admin/",
-      redirect: "/admin",
-    },
-    {
       path: "/:pathMatch(.*)*",
       name: "not-found",
       component: NotFoundView,
