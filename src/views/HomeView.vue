@@ -5,16 +5,17 @@
   import AppFooter from "../components/AppFooter.vue";
   import CategorySection from "../components/CategorySection.vue";
   import SidebarMenu from "../components/SidebarMenu.vue";
-  import { navigationCategories } from "../data/navigation";
+  import { type Category } from "../data/navigation";
   import { uiIcons } from "../icons";
+  import { fallbackNavigationCategories, loadNavigationCategories } from "../services/navigation";
 
-  const categories = navigationCategories;
-  const activeCategory = ref(categories[0]?.title ?? "");
+  const categories = ref<Category[]>(fallbackNavigationCategories);
+  const activeCategory = ref(categories.value[0]?.title ?? "");
   const isSidebarCollapsed = ref(false);
   const isMobileMenuVisible = ref(false);
   const MenuIcon = uiIcons.menu;
   const totalSites = computed(() =>
-    categories.reduce((count, category) => count + category.sites.length, 0),
+    categories.value.reduce((count, category) => count + category.sites.length, 0),
   );
 
   let scrollFrame = 0;
@@ -52,7 +53,7 @@
 
   function syncActiveCategory() {
     const offset = window.scrollY + 140;
-    let current = categories[0]?.title ?? "";
+    let current = categories.value[0]?.title ?? "";
 
     for (const category of categoryOffsets) {
       if (category.top <= offset) {
@@ -66,7 +67,7 @@
   }
 
   function measureCategoryOffsets() {
-    categoryOffsets = categories
+    categoryOffsets = categories.value
       .map((category) => {
         const element = document.getElementById(category.title);
 
@@ -124,9 +125,19 @@
     }
   }
 
+  function applyCategories(nextCategories: Category[]) {
+    categories.value = nextCategories;
+
+    if (!nextCategories.some((category) => category.title === activeCategory.value)) {
+      activeCategory.value = nextCategories[0]?.title ?? "";
+    }
+  }
+
   onMounted(async () => {
     window.addEventListener("scroll", requestSyncActiveCategory, { passive: true });
     window.addEventListener("resize", handleResize);
+
+    applyCategories(await loadNavigationCategories());
     await nextTick();
     measureCategoryOffsets();
     scrollToInitialHash();

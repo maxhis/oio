@@ -1,9 +1,12 @@
 <script setup lang="ts">
 import type { SiteLink } from "../data/navigation";
+import { computed } from "vue";
 
-defineProps<{
+const props = defineProps<{
   site: SiteLink;
 }>();
+
+const iconSrc = computed(() => props.site.iconUrl ?? `/assets/images/logos/${props.site.icon}`);
 </script>
 
 <template>
@@ -17,7 +20,7 @@ defineProps<{
     >
       <div class="site-card__icon-wrap">
         <img
-          :src="`/assets/images/logos/${site.icon}`"
+          :src="iconSrc"
           class="site-card__icon"
           width="44"
           height="44"

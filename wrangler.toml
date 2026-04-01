@@ -1,6 +1,21 @@
+"$schema" = "./node_modules/wrangler/config-schema.json"
 name = "oio"
+main = "./worker/index.ts"
 compatibility_date = "2026-04-01"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "oio"
+database_id = "5441efb9-0d7a-419a-a5d0-7ea3360a3dfd"
+preview_database_id = "oio-local"
+
+[[r2_buckets]]
+binding = "LOGOS"
+bucket_name = "oio-logos"
+preview_bucket_name = "oio-logos-preview"
 
 [assets]
 directory = "./dist"
+binding = "ASSETS"
 not_found_handling = "single-page-application"
+run_worker_first = ["/api/*", "/admin", "/admin/*"]

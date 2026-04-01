@@ -4,6 +4,7 @@ export interface SiteLink {
   displayLink: string;
   url: string;
   icon: string;
+  iconUrl?: string;
 }
 
 export interface Category {

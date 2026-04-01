@@ -8,7 +8,11 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "typecheck": "vue-tsc --noEmit"
+    "typecheck": "vue-tsc --noEmit",
+    "cf:dev": "wrangler dev",
+    "cf:deploy": "pnpm build && wrangler deploy",
+    "cf:d1:migrate:local": "wrangler d1 migrations apply oio --local",
+    "cf:d1:migrate:remote": "wrangler d1 migrations apply oio --remote"
   },
   "dependencies": {
     "lucide-vue-next": "^1.0.0",
@@ -19,6 +23,7 @@
     "@vitejs/plugin-vue": "^5.0.4",
     "typescript": "^5.4.5",
     "vite": "^6.0.0",
-    "vue-tsc": "^2.0.6"
+    "vue-tsc": "^2.0.6",
+    "wrangler": "^4.0.0"
   }
 }

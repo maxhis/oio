@@ -1,6 +1,7 @@
 import { createRouter, createWebHistory } from "vue-router";
 
 import AboutView from "../views/AboutView.vue";
+import AdminView from "../views/AdminView.vue";
 import HomeView from "../views/HomeView.vue";
 import NotFoundView from "../views/NotFoundView.vue";
 
@@ -31,6 +32,14 @@ const notFoundMeta = {
   bodyClass: "not-found-body",
 };
 
+const adminMeta = {
+  title: "后台管理 - oio.15tar.com",
+  description: "受 Cloudflare Access 保护的 oio.15tar.com 后台，用于维护导航数据。",
+  keywords: "oio.15tar.com,admin,cloudflare access,d1,r2",
+  image: "/assets/images/oio_banner.png",
+  bodyClass: "admin-body",
+};
+
 const router = createRouter({
   history: createWebHistory(),
   routes: [
@@ -53,6 +62,16 @@ const router = createRouter({
     {
       path: "/about.html",
       redirect: "/about",
+    },
+    {
+      path: "/admin",
+      name: "admin",
+      component: AdminView,
+      meta: adminMeta,
+    },
+    {
+      path: "/admin/",
+      redirect: "/admin",
     },
     {
       path: "/:pathMatch(.*)*",
