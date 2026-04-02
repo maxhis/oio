@@ -100,6 +100,13 @@ interface ResolvedSiteMetadata {
   iconUrl: string;
 }
 
+interface PreparedSiteIcon {
+  sourceUrl: string;
+  body: ArrayBuffer;
+  objectKey: string;
+  contentType: string;
+}
+
 interface SiteSubmissionPayload {
   website: string;
   description: string;
@@ -228,6 +235,15 @@ function normalizeExternalUrl(value: unknown): string {
   }
 
   return parsedUrl.toString();
+}
+
+function isExternalHttpUrl(value: string): boolean {
+  try {
+    const parsedUrl = new URL(value);
+    return parsedUrl.protocol === "http:" || parsedUrl.protocol === "https:";
+  } catch {
+    return false;
+  }
 }
 
 function sanitizeKeySegment(value: string): string {
@@ -419,11 +435,10 @@ function extractDocumentMetadata(html: string): { title: string; subTitle: strin
   };
 }
 
-async function cacheSiteIcon(
-  env: Env,
+async function fetchSiteIcon(
   siteUrl: string,
   candidateUrls: string[],
-): Promise<{ icon: string; iconUrl: string } | null> {
+): Promise<PreparedSiteIcon | null> {
   const attemptedUrls = Array.from(new Set([
     ...candidateUrls,
     createAbsoluteUrl("/favicon.ico", siteUrl),
@@ -469,22 +484,60 @@ async function cacheSiteIcon(
     const objectKey = `logos/autofetch/${siteHost}-${bodyHash.slice(0, 20)}.${extension}`;
     const contentType = resolveContentType(response.headers.get("content-type"), response.url, objectKey);
 
-    await env.LOGOS.put(objectKey, body, {
-      httpMetadata: {
-        contentType,
-        cacheControl: LONG_CACHE_CONTROL,
-      },
-    });
-
-    const icon = toClientIconValue(objectKey);
-
     return {
-      icon,
-      iconUrl: buildPublicLogoUrl(icon),
+      sourceUrl: response.url || candidateUrl,
+      body,
+      objectKey,
+      contentType,
     };
   }
 
   return null;
+}
+
+async function ensurePreparedSiteIconStored(
+  env: Env,
+  preparedIcon: PreparedSiteIcon,
+): Promise<{ icon: string; iconUrl: string }> {
+  const existingObject = await env.LOGOS.get(preparedIcon.objectKey);
+
+  if (!existingObject) {
+    await env.LOGOS.put(preparedIcon.objectKey, preparedIcon.body, {
+      httpMetadata: {
+        contentType: preparedIcon.contentType,
+        cacheControl: LONG_CACHE_CONTROL,
+      },
+    });
+  }
+
+  const icon = toClientIconValue(preparedIcon.objectKey);
+
+  return {
+    icon,
+    iconUrl: buildPublicLogoUrl(icon),
+  };
+}
+
+async function persistSiteIconIfNeeded(
+  env: Env,
+  siteUrl: string,
+  icon: string,
+): Promise<string> {
+  if (!icon) {
+    return "default.png";
+  }
+
+  if (!isExternalHttpUrl(icon)) {
+    return icon;
+  }
+
+  const preparedIcon = await fetchSiteIcon(siteUrl, [icon]);
+
+  if (!preparedIcon) {
+    throw new Error("保存站点时抓取解析出的 logo 失败，请重新解析后再试。");
+  }
+
+  return (await ensurePreparedSiteIconStored(env, preparedIcon)).icon;
 }
 
 async function resolveSiteMetadata(env: Env, rawUrl: string): Promise<ResolvedSiteMetadata> {
@@ -519,11 +572,7 @@ async function resolveSiteMetadata(env: Env, rawUrl: string): Promise<ResolvedSi
       }
     })
     .filter(Boolean);
-  const cachedIcon = await cacheSiteIcon(
-    env,
-    resolvedUrl,
-    resolvedIconCandidates,
-  );
+  const preparedIcon = await fetchSiteIcon(resolvedUrl, resolvedIconCandidates);
 
   return {
     title: extracted.title,
@@ -531,8 +580,8 @@ async function resolveSiteMetadata(env: Env, rawUrl: string): Promise<ResolvedSi
     displayLink: normalizedUrl,
     url: normalizedUrl,
     resolvedUrl,
-    icon: cachedIcon?.icon ?? "default.png",
-    iconUrl: cachedIcon?.iconUrl ?? buildPublicLogoUrl("default.png"),
+    icon: preparedIcon?.sourceUrl ?? "default.png",
+    iconUrl: preparedIcon?.sourceUrl ?? buildPublicLogoUrl("default.png"),
   };
 }
 
@@ -1284,6 +1333,7 @@ async function createSiteInD1(
 ): Promise<SiteRow> {
   await requireCategoryRowById(env, fields.categoryId);
   await ensureSiteFieldsAvailable(env, fields.categoryId, fields.title, fields.url);
+  const persistedIcon = await persistSiteIconIfNeeded(env, fields.url, fields.icon);
 
   const nextSortOrder = await env.DB
     .prepare("SELECT COALESCE(MAX(sort_order), -1) + 1 AS nextSortOrder FROM sites WHERE category_id = ?")
@@ -1304,7 +1354,7 @@ async function createSiteInD1(
       fields.subTitle,
       fields.displayLink,
       fields.url,
-      buildLogoObjectKey(fields.icon),
+      buildLogoObjectKey(persistedIcon),
       nextSortOrder ?? 0,
     )
     .all();
@@ -1325,8 +1375,8 @@ async function updateSiteInD1(
   const currentSite = await requireSiteRowById(env, siteId);
   await requireCategoryRowById(env, fields.categoryId);
   await ensureSiteFieldsAvailable(env, fields.categoryId, fields.title, fields.url, siteId);
-
-  const nextIconKey = buildLogoObjectKey(fields.icon);
+  const persistedIcon = await persistSiteIconIfNeeded(env, fields.url, fields.icon);
+  const nextIconKey = buildLogoObjectKey(persistedIcon);
   const nextSortOrder = currentSite.category_id === fields.categoryId
     ? currentSite.sort_order
     : await env.DB

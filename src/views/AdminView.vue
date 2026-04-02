@@ -152,9 +152,18 @@ const isCategoryIconPreset = computed(() =>
 const activeCategoryIconOption = computed(() =>
   categoryIconOptions.find((option) => option.key === categoryDraft.value.icon) ?? null,
 );
+
+function isExternalHttpUrl(value: string): boolean {
+  return /^https?:\/\//i.test(value.trim());
+}
+
 const siteIconPreviewUrl = computed(() => {
   if (siteMetadata.value?.iconUrl) {
     return siteMetadata.value.iconUrl;
+  }
+
+  if (isExternalHttpUrl(siteDraft.value.icon)) {
+    return siteDraft.value.icon;
   }
 
   return buildAdminIconUrl(siteDraft.value.icon || "default.png");
@@ -164,7 +173,7 @@ const sitePreviewSubTitle = computed(() => siteDraft.value.subTitle.trim() || "�
 const sitePreviewDisplayLink = computed(() => siteDraft.value.displayLink.trim() || siteDraft.value.url.trim() || "展示链接默认与跳转链接一致");
 const siteMetadataStatusText = computed(() => {
   if (siteMetadataStatus.value === "loading") {
-    return "正在解析站点信息并抓取图标";
+    return "正在解析站点信息和 logo 预览";
   }
 
   if (siteMetadataStatus.value === "success") {
@@ -419,8 +428,8 @@ async function resolveSiteMetadataForUrl(rawUrl = siteDraft.value.url, force = f
     siteMetadata.value = metadata;
     siteMetadataStatus.value = "success";
     siteMetadataMessage.value = metadata.resolvedUrl && metadata.resolvedUrl !== metadata.url
-      ? `已解析并跟随到 ${new URL(metadata.resolvedUrl).hostname}`
-      : `已解析 ${new URL(metadata.url).hostname}`;
+      ? `已解析并跟随到 ${new URL(metadata.resolvedUrl).hostname}，点击创建/保存时才会上传 logo 到 R2`
+      : `已解析 ${new URL(metadata.url).hostname}，点击创建/保存时才会上传 logo 到 R2`;
     lastResolvedSiteUrl = metadata.url;
 
     shouldSkipNextSiteLookup = true;
@@ -974,7 +983,7 @@ onUnmounted(() => {
                     {{ siteMetadataStatus === "loading" ? "解析中" : "重新解析" }}
                   </button>
                 </div>
-                <small class="admin-field__hint">输入后自动解析标题、简介和图标，保存时默认作为展示链接。</small>
+                <small class="admin-field__hint">输入后自动解析标题、简介和图标预览；点击创建/保存时才会把解析出的 logo 上传到 R2。</small>
               </label>
 
               <div class="admin-site-preview">
