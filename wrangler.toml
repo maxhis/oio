@@ -21,6 +21,10 @@ binding = "LOGOS"
 bucket_name = "oio-logos"
 preview_bucket_name = "oio-logos-preview"
 
+[observability]
+enabled = true
+head_sampling_rate = 1
+
 [assets]
 directory = "./dist"
 binding = "ASSETS"
