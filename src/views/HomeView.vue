@@ -7,14 +7,14 @@
   import SidebarMenu from "../components/SidebarMenu.vue";
   import { type Category } from "../data/navigation";
   import { uiIcons } from "../icons";
-  import { fallbackNavigationCategories, loadNavigationCategories } from "../services/navigation";
+  import { getInitialNavigationCategories, loadNavigationCategories } from "../services/navigation";
   import {
     createEmptySiteSubmissionInput,
     submitSiteSubmission,
     type SiteSubmissionInput,
   } from "../services/submissions";
 
-  const categories = ref<Category[]>(fallbackNavigationCategories);
+  const categories = ref<Category[]>(getInitialNavigationCategories());
   const activeCategory = ref(categories.value[0]?.title ?? "");
   const isSidebarCollapsed = ref(false);
   const isMobileMenuVisible = ref(false);
@@ -263,7 +263,7 @@
         <button type="button" class="site-mobilebar__toggle" @click="toggleMobileMenu" aria-label="打开导航菜单">
           <MenuIcon :size="18" :stroke-width="2.1" />
         </button>
-        <RouterLink to="/" class="site-mobilebar__brand">oio.15tar.com</RouterLink>
+        <RouterLink to="/" class="site-mobilebar__brand">OIO</RouterLink>
       </header>
 
       <section class="hero-panel">

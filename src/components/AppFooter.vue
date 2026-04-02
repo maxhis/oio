@@ -36,7 +36,7 @@ function scrollToTop(event: Event) {
     <div class="site-footer__inner">
       <div class="site-footer__text">
         {{ copyrightText }}
-        <RouterLink to="/"><strong>oio.15tar.com</strong></RouterLink>
+        <RouterLink to="/"><strong>OIO</strong></RouterLink>
         by
         <a href="https://go.15tar.com/blog" target="_blank" rel="noreferrer">
           <strong>iStar</strong>

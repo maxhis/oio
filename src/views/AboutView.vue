@@ -14,7 +14,7 @@
             <img src="/assets/images/logo-mark.svg" alt="" class="about-hero__logo" />
           </span>
           <span class="about-hero__brand-copy">
-            <span class="about-hero__domain">oio.15tar.com</span>
+            <span class="about-hero__domain">OIO</span>
             <span class="about-hero__brand-text">开发者网址导航</span>
           </span>
         </RouterLink>

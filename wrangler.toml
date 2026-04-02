@@ -3,6 +3,8 @@ name = "oio"
 main = "./worker/index.ts"
 compatibility_date = "2026-04-01"
 routes = [
+  { pattern = "oio.15tar.com/", zone_name = "15tar.com" },
+  { pattern = "oio.15tar.com/index.html", zone_name = "15tar.com" },
   { pattern = "oio.15tar.com/api/*", zone_name = "15tar.com" },
   { pattern = "oio.15tar.com/admin", zone_name = "15tar.com" },
   { pattern = "oio.15tar.com/admin/*", zone_name = "15tar.com" },
@@ -23,4 +25,4 @@ preview_bucket_name = "oio-logos-preview"
 directory = "./dist"
 binding = "ASSETS"
 not_found_handling = "single-page-application"
-run_worker_first = ["/api/*", "/admin", "/admin/*"]
+run_worker_first = ["/", "/index.html", "/api/*", "/admin", "/admin/*"]

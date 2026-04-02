@@ -2163,6 +2163,10 @@ img {
     align-items: flex-start;
   }
 
+  .site-footer__text {
+    text-align: left;
+  }
+
   .admin-page {
     padding: 0.9rem;
   }

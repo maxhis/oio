@@ -1,3 +1,5 @@
+import { buildPublicLogoUrl } from "../config/logos";
+
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? "").replace(/\/$/, "");
 
 export interface AdminSession {
@@ -99,13 +101,7 @@ export function createEmptySiteInput(categoryId = 0): SiteInput {
 }
 
 export function buildAdminIconUrl(icon: string): string {
-  const sanitized = icon.startsWith("logos/") ? icon : `logos/${icon}`;
-  const encodedPath = sanitized
-    .split("/")
-    .map((segment) => encodeURIComponent(segment))
-    .join("/");
-
-  return `${API_BASE_URL}/api/assets/${encodedPath}`;
+  return buildPublicLogoUrl(icon);
 }
 
 export async function loadAdminSession(): Promise<AdminSession> {

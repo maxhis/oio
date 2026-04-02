@@ -1,4 +1,5 @@
 import { load } from "cheerio";
+import { buildPublicLogoUrl, normalizeLogoObjectKey } from "../src/config/logos";
 import { navigationCategories, type Category } from "../src/data/navigation";
 
 interface D1PreparedStatementLike {
@@ -107,6 +108,7 @@ interface SiteSubmissionPayload {
 
 const LONG_CACHE_CONTROL = "public, max-age=31536000, immutable";
 const NAVIGATION_CACHE_CONTROL = "public, max-age=300, stale-while-revalidate=3600";
+const HOME_PAGE_CACHE_CONTROL = "public, max-age=300, stale-while-revalidate=3600";
 const SITE_LOOKUP_USER_AGENT =
   "Mozilla/5.0 (compatible; oio-site-metadata/1.0; +https://oio.15tar.com)";
 const SUBMISSION_SHORT_WINDOW_MS = 60 * 1000;
@@ -150,22 +152,39 @@ function unauthorizedJson(): Response {
 }
 
 function buildLogoObjectKey(icon: string): string {
-  return icon.startsWith("logos/") ? icon : `logos/${icon}`;
+  return normalizeLogoObjectKey(icon);
 }
 
 function toClientIconValue(iconKey: string): string {
   return iconKey.startsWith("logos/") ? iconKey.slice("logos/".length) : iconKey;
 }
 
-function buildApiIconUrl(icon: string): string {
-  return `/api/assets/${buildLogoObjectKey(icon)
-    .split("/")
-    .map((segment) => encodeURIComponent(segment))
-    .join("/")}`;
-}
-
 function collapseWhitespace(value: string): string {
   return value.replace(/\s+/g, " ").trim();
+}
+
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+function serializeBootstrapData(value: unknown): string {
+  return JSON.stringify(value).replace(/[<\u2028\u2029]/g, (character) => {
+    switch (character) {
+      case "<":
+        return "\\u003c";
+      case "\u2028":
+        return "\\u2028";
+      case "\u2029":
+        return "\\u2029";
+      default:
+        return character;
+    }
+  });
 }
 
 function normalizeOptionalString(value: unknown): string {
@@ -460,7 +479,7 @@ async function cacheSiteIcon(
 
     return {
       icon,
-      iconUrl: buildApiIconUrl(icon),
+      iconUrl: buildPublicLogoUrl(icon),
     };
   }
 
@@ -512,7 +531,7 @@ async function resolveSiteMetadata(env: Env, rawUrl: string): Promise<ResolvedSi
     url: normalizedUrl,
     resolvedUrl,
     icon: cachedIcon?.icon ?? "default.png",
-    iconUrl: cachedIcon?.iconUrl ?? buildApiIconUrl("default.png"),
+    iconUrl: cachedIcon?.iconUrl ?? buildPublicLogoUrl("default.png"),
   };
 }
 
@@ -535,7 +554,7 @@ function mapStaticCategoriesToApiPayload(categories: Category[]): Category[] {
     ...category,
     sites: category.sites.map((site) => ({
       ...site,
-      iconUrl: buildApiIconUrl(site.icon),
+      iconUrl: buildPublicLogoUrl(site.icon),
     })),
   }));
 }
@@ -780,7 +799,7 @@ function mapAdminRecordsToPublicNavigation(categories: AdminCategoryRecord[]): C
       displayLink: site.displayLink,
       url: site.url,
       icon: site.icon,
-      iconUrl: buildApiIconUrl(site.icon),
+      iconUrl: buildPublicLogoUrl(site.icon),
     })),
   }));
 }
@@ -1511,6 +1530,179 @@ async function handleNavigationRequest(env: Env): Promise<Response> {
   }
 }
 
+async function loadPublicNavigation(env: Env): Promise<{ categories: Category[]; source: "bootstrap" | "d1" | "fallback" }> {
+  try {
+    const bootstrapped = await seedNavigationIfEmpty(env);
+    const categories = await readNavigationFromD1(env);
+
+    return {
+      categories,
+      source: bootstrapped ? "bootstrap" : "d1",
+    };
+  } catch (error) {
+    console.error("Failed to load navigation for homepage rendering.", error);
+
+    return {
+      categories: mapStaticCategoriesToApiPayload(navigationCategories),
+      source: "fallback",
+    };
+  }
+}
+
+function renderSiteSidebar(categories: Category[]): string {
+  return [
+    '<aside class="site-sidebar">',
+    '<header class="site-sidebar__header">',
+    '<a href="/" class="site-brand">',
+    '<span class="site-brand__badge" aria-hidden="true">',
+    '<img src="/assets/images/logo-mark.svg" class="site-brand__mark" alt="" />',
+    "</span>",
+    '<span class="site-brand__copy">',
+    '<span class="site-brand__domain">OIO</span>',
+    '<span class="site-brand__text">开发者网址导航</span>',
+    "</span>",
+    "</a>",
+    '<div class="site-sidebar__actions">',
+    '<button type="button" class="site-sidebar__toggle site-sidebar__toggle--desktop" aria-label="切换侧边栏">',
+    '<span aria-hidden="true">≡</span>',
+    "</button>",
+    "</div>",
+    "</header>",
+    '<div class="site-sidebar__intro">',
+    '<p class="site-sidebar__kicker">OIO</p>',
+    '<p class="site-sidebar__blurb">收集经常回访、值得长期保存的开发资源，把书签整理成真正可浏览的索引。</p>',
+    "</div>",
+    '<nav class="site-sidebar__nav" aria-label="分类导航">',
+    categories.map((category, index) =>
+      [
+        `<a class="site-sidebar__link${index === 0 ? " is-active" : ""}" href="/#${encodeURIComponent(category.title)}"${index === 0 ? ' aria-current="true"' : ""}>`,
+        `<span class="site-sidebar__label">${escapeHtml(category.title)}</span>`,
+        "</a>",
+      ].join("")).join(""),
+    "</nav>",
+    '<div class="site-sidebar__footer">',
+    '<a href="/about" class="site-sidebar__secondary-link">',
+    '<span class="site-sidebar__label">关于本站</span>',
+    "</a>",
+    '<a href="/#submit" class="site-sidebar__secondary-link">',
+    '<span class="site-sidebar__label">我要投稿</span>',
+    "</a>",
+    "</div>",
+    "</aside>",
+  ].join("");
+}
+
+function renderCategorySections(categories: Category[]): string {
+  return categories.map((category) =>
+    [
+      `<section id="${escapeHtml(category.title)}" class="category-section">`,
+      '<header class="category-section__header">',
+      `<h2 class="category-section__title"><span>${escapeHtml(category.title)}</span></h2>`,
+      "</header>",
+      '<div class="site-grid">',
+      category.sites.map((site) => {
+        const iconUrl = site.iconUrl ?? buildPublicLogoUrl(site.icon);
+
+        return [
+          '<article class="site-card">',
+          `<a class="site-card__link" href="${escapeHtml(site.url)}" target="_blank" rel="noreferrer" title="${escapeHtml(site.displayLink)}">`,
+          '<div class="site-card__icon-wrap">',
+          `<img src="${escapeHtml(iconUrl)}" class="site-card__icon" width="44" height="44" alt="${escapeHtml(site.title)}" loading="lazy" decoding="async" />`,
+          "</div>",
+          '<div class="site-card__body">',
+          `<div class="site-card__title">${escapeHtml(site.title)}</div>`,
+          `<p class="site-card__desc">${escapeHtml(site.subTitle)}</p>`,
+          `<div class="site-card__meta">${escapeHtml(site.displayLink)}</div>`,
+          "</div>",
+          "</a>",
+          "</article>",
+        ].join("");
+      }).join(""),
+      "</div>",
+      "</section>",
+    ].join("")).join("");
+}
+
+function renderHomePageHtml(categories: Category[]): string {
+  const totalSites = categories.reduce((count, category) => count + category.sites.length, 0);
+  const currentYear = new Date().getFullYear();
+  const copyrightText = currentYear > 2019 ? `© 2019-${currentYear}` : "© 2019";
+
+  return [
+    '<div class="site-shell home-page">',
+    renderSiteSidebar(categories),
+    '<div class="site-shell__backdrop"></div>',
+    '<main class="site-main">',
+    '<header class="site-mobilebar">',
+    '<button type="button" class="site-mobilebar__toggle" aria-label="打开导航菜单">',
+    '<span aria-hidden="true">≡</span>',
+    "</button>",
+    '<a href="/" class="site-mobilebar__brand">OIO</a>',
+    "</header>",
+    '<section class="hero-panel">',
+    '<div class="hero-panel__content">',
+    '<h1 class="hero-panel__title">把常用开发资源整理成一份真正可浏览的索引。</h1>',
+    '<p class="hero-panel__description">从大前端到大后端，从学习资源到日常工具，把容易遗失在收藏夹里的站点按使用场景归档。</p>',
+    "</div>",
+    '<div class="hero-panel__stats">',
+    '<div class="hero-stat">',
+    `<span class="hero-stat__value">${categories.length}</span>`,
+    '<span class="hero-stat__label">分类</span>',
+    "</div>",
+    '<div class="hero-stat">',
+    `<span class="hero-stat__value">${totalSites}</span>`,
+    '<span class="hero-stat__label">站点</span>',
+    "</div>",
+    "</div>",
+    "</section>",
+    `<div class="category-list">${renderCategorySections(categories)}</div>`,
+    '<footer class="site-footer">',
+    '<div class="site-footer__inner">',
+    `<div class="site-footer__text">${escapeHtml(copyrightText)} <a href="/"><strong>OIO</strong></a> by <a href="https://go.15tar.com/blog" target="_blank" rel="noreferrer"><strong>iStar</strong></a></div>`,
+    '<div class="site-footer__top"><a href="#" rel="go-top" aria-label="回到顶部">↑</a></div>',
+    "</div>",
+    "</footer>",
+    "</main>",
+    "</div>",
+  ].join("");
+}
+
+async function handleHomePageRequest(request: Request, env: Env): Promise<Response> {
+  const assetUrl = new URL("/index.html", request.url);
+  const assetResponse = await env.ASSETS.fetch(
+    new Request(assetUrl.toString(), {
+      method: "GET",
+      headers: request.headers,
+    }),
+  );
+
+  if (!assetResponse.ok) {
+    return assetResponse;
+  }
+
+  const navigation = await loadPublicNavigation(env);
+  const template = await assetResponse.text();
+  const html = template
+    .replace('class="page-body"', 'class="home-body"')
+    .replace("<!--app-html-->", renderHomePageHtml(navigation.categories))
+    .replace(
+      "<!--app-data-->",
+      `<script>window.__OIO_NAV__=${serializeBootstrapData(navigation)};</script>`,
+    );
+  const headers = new Headers(assetResponse.headers);
+
+  headers.set("content-type", "text/html; charset=utf-8");
+  headers.set("cache-control", HOME_PAGE_CACHE_CONTROL);
+  headers.delete("content-length");
+  headers.delete("etag");
+
+  return new Response(request.method === "HEAD" ? null : html, {
+    status: assetResponse.status,
+    statusText: assetResponse.statusText,
+    headers,
+  });
+}
+
 async function handleSubmissionRequest(request: Request, env: Env): Promise<Response> {
   if (request.method !== "POST") {
     return new Response("Method Not Allowed", {
@@ -2097,6 +2289,10 @@ const worker = {
     const url = new URL(request.url);
     const categoryDetailMatch = url.pathname.match(/^\/api\/admin\/categories\/(\d+)$/);
     const siteDetailMatch = url.pathname.match(/^\/api\/admin\/sites\/(\d+)$/);
+
+    if ((url.pathname === "/" || url.pathname === "/index.html") && (request.method === "GET" || request.method === "HEAD")) {
+      return handleHomePageRequest(request, env);
+    }
 
     if (url.pathname === "/api/navigation") {
       return handleNavigationRequest(env);

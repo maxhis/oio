@@ -1,7 +1,9 @@
+import { buildPublicLogoUrl } from "../config/logos";
 import { navigationCategories, type Category } from "../data/navigation";
 
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? "").replace(/\/$/, "");
-const LOCAL_LOGO_BASE = "/assets/images/logos";
+
+let bootstrappedCategories: Category[] | null | undefined;
 
 function isSiteRecord(value: unknown): boolean {
   if (!value || typeof value !== "object") {
@@ -20,12 +22,12 @@ function isSiteRecord(value: unknown): boolean {
   );
 }
 
-function withLocalIconUrls(categories: Category[]): Category[] {
+function withPublicIconUrls(categories: Category[]): Category[] {
   return categories.map((category) => ({
     ...category,
     sites: category.sites.map((site) => ({
       ...site,
-      iconUrl: `${LOCAL_LOGO_BASE}/${site.icon}`,
+      iconUrl: buildPublicLogoUrl(site.icon),
     })),
   }));
 }
@@ -45,9 +47,37 @@ function isCategoryRecord(value: unknown): value is Category {
   );
 }
 
-export const fallbackNavigationCategories = withLocalIconUrls(navigationCategories);
+export const fallbackNavigationCategories = withPublicIconUrls(navigationCategories);
+
+function readBootstrappedCategories(): Category[] | null {
+  if (bootstrappedCategories !== undefined) {
+    return bootstrappedCategories;
+  }
+
+  if (typeof window === "undefined") {
+    bootstrappedCategories = null;
+    return bootstrappedCategories;
+  }
+
+  const payload = window.__OIO_NAV__;
+  bootstrappedCategories = Array.isArray(payload?.categories) && payload.categories.every(isCategoryRecord)
+    ? payload.categories
+    : null;
+
+  return bootstrappedCategories;
+}
+
+export function getInitialNavigationCategories(): Category[] {
+  return readBootstrappedCategories() ?? fallbackNavigationCategories;
+}
 
 export async function loadNavigationCategories(): Promise<Category[]> {
+  const bootstrapped = readBootstrappedCategories();
+
+  if (bootstrapped) {
+    return bootstrapped;
+  }
+
   try {
     const response = await fetch(`${API_BASE_URL}/api/navigation`, {
       headers: {

@@ -9,6 +9,7 @@ import {
   Gem,
   Globe,
   GraduationCap,
+  Github,
   Heart,
   Lightbulb,
   Palette,
@@ -28,6 +29,7 @@ export const uiIcons = {
   close: X,
   heart: Heart,
   mail: Mail,
+  github: Github,
   chevronUp: ChevronUp,
 } satisfies Record<string, Component>;
 
