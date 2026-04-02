@@ -26,6 +26,7 @@ interface R2ObjectBodyLike {
 
 interface R2BucketLike {
   get(key: string): Promise<R2ObjectBodyLike | null>;
+  delete(key: string): Promise<void>;
   put(
     key: string,
     value: ReadableStream | ArrayBuffer | ArrayBufferView | string | Blob,
@@ -1245,7 +1246,13 @@ async function updateCategoryInD1(
 
 async function deleteCategoryInD1(env: Env, categoryId: number): Promise<void> {
   await requireCategoryRowById(env, categoryId);
+  const { results: siteRows } = await env.DB
+    .prepare("SELECT DISTINCT icon_key FROM sites WHERE category_id = ?")
+    .bind(categoryId)
+    .all<{ icon_key: string }>();
+
   await env.DB.prepare("DELETE FROM categories WHERE id = ?").bind(categoryId).all();
+  await deleteUnusedLogoObjects(env, siteRows.map((row) => row.icon_key));
 }
 
 async function reorderCategoriesInD1(env: Env, categoryIds: number[]): Promise<void> {
@@ -1319,6 +1326,7 @@ async function updateSiteInD1(
   await requireCategoryRowById(env, fields.categoryId);
   await ensureSiteFieldsAvailable(env, fields.categoryId, fields.title, fields.url, siteId);
 
+  const nextIconKey = buildLogoObjectKey(fields.icon);
   const nextSortOrder = currentSite.category_id === fields.categoryId
     ? currentSite.sort_order
     : await env.DB
@@ -1340,18 +1348,54 @@ async function updateSiteInD1(
       fields.subTitle,
       fields.displayLink,
       fields.url,
-      buildLogoObjectKey(fields.icon),
+      nextIconKey,
       nextSortOrder,
       siteId,
     )
     .all();
 
+  if (currentSite.icon_key !== nextIconKey) {
+    await deleteUnusedLogoObjects(env, [currentSite.icon_key]);
+  }
+
   return requireSiteRowById(env, siteId);
 }
 
 async function deleteSiteInD1(env: Env, siteId: number): Promise<void> {
-  await requireSiteRowById(env, siteId);
+  const site = await requireSiteRowById(env, siteId);
   await env.DB.prepare("DELETE FROM sites WHERE id = ?").bind(siteId).all();
+  await deleteUnusedLogoObjects(env, [site.icon_key]);
+}
+
+async function deleteUnusedLogoObjects(env: Env, iconKeys: string[]): Promise<void> {
+  const uniqueIconKeys = [...new Set(
+    iconKeys
+      .map((iconKey) => buildLogoObjectKey(iconKey))
+      .filter((iconKey) => iconKey.startsWith("logos/")),
+  )];
+
+  if (uniqueIconKeys.length === 0) {
+    return;
+  }
+
+  const keysToDelete: string[] = [];
+
+  for (const iconKey of uniqueIconKeys) {
+    const referenceCount = await env.DB
+      .prepare("SELECT COUNT(*) AS referenceCount FROM sites WHERE icon_key = ?")
+      .bind(iconKey)
+      .first<number>("referenceCount") ?? 0;
+
+    if (referenceCount === 0) {
+      keysToDelete.push(iconKey);
+    }
+  }
+
+  if (keysToDelete.length === 0) {
+    return;
+  }
+
+  await Promise.all(keysToDelete.map((iconKey) => env.LOGOS.delete(iconKey)));
 }
 
 async function reorderSitesInD1(env: Env, categoryId: number, siteIds: number[]): Promise<void> {

@@ -577,7 +577,7 @@ async function removeSite(siteId: number) {
     return;
   }
 
-  if (!confirmDanger(`删除站点「${site.title}」？`)) {
+  if (!confirmDanger(`删除站点「${site.title}」？对应 logo 资源也会从 R2 同步清理（若未被其他站点复用）。`)) {
     return;
   }
 
