@@ -432,6 +432,15 @@ img {
   gap: 0.45rem;
 }
 
+.submission-field--honeypot {
+  position: absolute;
+  left: -9999px;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  pointer-events: none;
+}
+
 .submission-field__label {
   font-size: 0.92rem;
   font-weight: 700;

@@ -4,6 +4,7 @@ export interface SiteSubmissionInput {
   website: string;
   description: string;
   contact: string;
+  company: string;
 }
 
 export function createEmptySiteSubmissionInput(): SiteSubmissionInput {
@@ -11,6 +12,7 @@ export function createEmptySiteSubmissionInput(): SiteSubmissionInput {
     website: "",
     description: "",
     contact: "",
+    company: "",
   };
 }
 

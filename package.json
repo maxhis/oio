@@ -10,7 +10,7 @@
     "preview": "vite preview",
     "typecheck": "vue-tsc --noEmit",
     "cf:dev": "wrangler dev",
-    "cf:deploy": "pnpm build && wrangler deploy",
+    "cf:deploy": "pnpm build && wrangler deploy --keep-vars",
     "cf:d1:migrate:local": "wrangler d1 migrations apply oio --local",
     "cf:d1:migrate:remote": "wrangler d1 migrations apply oio --remote"
   },

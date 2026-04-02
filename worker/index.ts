@@ -5,6 +5,7 @@ interface D1PreparedStatementLike {
   bind(...values: unknown[]): D1PreparedStatementLike;
   all<T = Record<string, unknown>>(): Promise<{ results: T[] }>;
   first<T = unknown>(columnName?: string): Promise<T | null>;
+  run(): Promise<unknown>;
 }
 
 interface D1DatabaseLike {
@@ -101,12 +102,29 @@ interface SiteSubmissionPayload {
   website: string;
   description: string;
   contact: string;
+  company: string;
 }
 
 const LONG_CACHE_CONTROL = "public, max-age=31536000, immutable";
 const NAVIGATION_CACHE_CONTROL = "public, max-age=300, stale-while-revalidate=3600";
 const SITE_LOOKUP_USER_AGENT =
   "Mozilla/5.0 (compatible; oio-site-metadata/1.0; +https://oio.15tar.com)";
+const SUBMISSION_SHORT_WINDOW_MS = 60 * 1000;
+const SUBMISSION_LONG_WINDOW_MS = 24 * 60 * 60 * 1000;
+const SUBMISSION_MAX_PER_MINUTE = 3;
+const SUBMISSION_MAX_PER_DAY = 15;
+
+class SubmissionGuardError extends Error {
+  status: number;
+  headers?: HeadersInit;
+
+  constructor(message: string, status: number, headers?: HeadersInit) {
+    super(message);
+    this.name = "SubmissionGuardError";
+    this.status = status;
+    this.headers = headers;
+  }
+}
 
 function json(data: unknown, init?: ResponseInit): Response {
   return new Response(JSON.stringify(data), {
@@ -275,6 +293,12 @@ function toHex(buffer: ArrayBuffer): string {
 
 async function sha1Hex(buffer: ArrayBuffer): Promise<string> {
   const hashBuffer = await crypto.subtle.digest("SHA-1", buffer);
+  return toHex(hashBuffer);
+}
+
+async function sha256HexText(value: string): Promise<string> {
+  const buffer = new TextEncoder().encode(value);
+  const hashBuffer = await crypto.subtle.digest("SHA-256", buffer);
   return toHex(hashBuffer);
 }
 
@@ -595,6 +619,7 @@ function normalizeSubmissionFields(value: unknown): SiteSubmissionPayload {
 
   const description = normalizeMultilineText(value.description);
   const contact = normalizeMultilineText(value.contact);
+  const company = normalizeOptionalString(value.company);
 
   if (!website) {
     throw new Error("请填写网站地址。");
@@ -616,7 +641,120 @@ function normalizeSubmissionFields(value: unknown): SiteSubmissionPayload {
     website,
     description,
     contact,
+    company,
   };
+}
+
+function parseUrlLike(value: string): URL | null {
+  try {
+    return new URL(value);
+  } catch {
+    return null;
+  }
+}
+
+function isLoopbackHostname(hostname: string): boolean {
+  return hostname === "127.0.0.1" || hostname === "localhost";
+}
+
+function hasAllowedSubmissionOrigin(request: Request): boolean {
+  const requestUrl = new URL(request.url);
+  const originHeader = request.headers.get("origin")?.trim() ?? "";
+  const refererHeader = request.headers.get("referer")?.trim() ?? "";
+  const sourceUrl = parseUrlLike(originHeader) ?? parseUrlLike(refererHeader);
+
+  if (!sourceUrl) {
+    return isLoopbackHostname(requestUrl.hostname);
+  }
+
+  if (isLoopbackHostname(requestUrl.hostname)) {
+    return isLoopbackHostname(sourceUrl.hostname);
+  }
+
+  return sourceUrl.protocol === requestUrl.protocol && sourceUrl.hostname === requestUrl.hostname;
+}
+
+function isJsonRequest(request: Request): boolean {
+  const contentType = request.headers.get("content-type")?.toLowerCase() ?? "";
+  return contentType.includes("application/json");
+}
+
+function getSubmissionClientFingerprintSource(request: Request): string {
+  const ip = request.headers.get("cf-connecting-ip")?.trim() ?? "";
+  const userAgent = request.headers.get("user-agent")?.trim() ?? "";
+  const country = request.headers.get("cf-ipcountry")?.trim() ?? "";
+
+  return [ip || "unknown-ip", userAgent || "unknown-ua", country || "unknown-country"].join("|");
+}
+
+async function ensureSubmissionProtectionSchema(env: Env): Promise<void> {
+  await env.DB.batch([
+    env.DB.prepare(`
+      CREATE TABLE IF NOT EXISTS submission_attempts (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        fingerprint_hash TEXT NOT NULL,
+        created_at INTEGER NOT NULL
+      )
+    `),
+    env.DB.prepare(`
+      CREATE INDEX IF NOT EXISTS idx_submission_attempts_fingerprint_created_at
+      ON submission_attempts (fingerprint_hash, created_at DESC)
+    `),
+    env.DB.prepare(`
+      CREATE INDEX IF NOT EXISTS idx_submission_attempts_created_at
+      ON submission_attempts (created_at DESC)
+    `),
+  ]);
+}
+
+async function enforceSubmissionRateLimit(request: Request, env: Env): Promise<void> {
+  await ensureSubmissionProtectionSchema(env);
+
+  const now = Date.now();
+  const shortWindowStart = now - SUBMISSION_SHORT_WINDOW_MS;
+  const longWindowStart = now - SUBMISSION_LONG_WINDOW_MS;
+  const fingerprintHash = await sha256HexText(getSubmissionClientFingerprintSource(request));
+  const shortWindowCount = await env.DB
+    .prepare(`
+      SELECT COUNT(*) AS count
+      FROM submission_attempts
+      WHERE fingerprint_hash = ? AND created_at >= ?
+    `)
+    .bind(fingerprintHash, shortWindowStart)
+    .first<number>("count");
+  const longWindowCount = await env.DB
+    .prepare(`
+      SELECT COUNT(*) AS count
+      FROM submission_attempts
+      WHERE fingerprint_hash = ? AND created_at >= ?
+    `)
+    .bind(fingerprintHash, longWindowStart)
+    .first<number>("count");
+
+  if ((shortWindowCount ?? 0) >= SUBMISSION_MAX_PER_MINUTE) {
+    throw new SubmissionGuardError(
+      "提交过于频繁，请 10 分钟后再试。",
+      429,
+      { "retry-after": String(Math.ceil(SUBMISSION_SHORT_WINDOW_MS / 1000)) },
+    );
+  }
+
+  if ((longWindowCount ?? 0) >= SUBMISSION_MAX_PER_DAY) {
+    throw new SubmissionGuardError(
+      "今天的投稿次数已达到上限，请明天再试。",
+      429,
+      { "retry-after": String(Math.ceil(SUBMISSION_LONG_WINDOW_MS / 1000)) },
+    );
+  }
+
+  await env.DB.batch([
+    env.DB
+      .prepare("INSERT INTO submission_attempts (fingerprint_hash, created_at) VALUES (?, ?)")
+      .bind(fingerprintHash, now),
+    env.DB
+      .prepare("DELETE FROM submission_attempts WHERE created_at < ?")
+      .bind(longWindowStart),
+  ]);
 }
 
 function mapSiteRowToAdminRecord(site: SiteRow): AdminSiteRecord {
@@ -1383,9 +1521,47 @@ async function handleSubmissionRequest(request: Request, env: Env): Promise<Resp
     });
   }
 
+  if (!hasAllowedSubmissionOrigin(request)) {
+    return json(
+      { error: "投稿来源无效，请直接在本站页面中提交。" },
+      {
+        status: 403,
+        headers: {
+          "cache-control": "no-store",
+        },
+      },
+    );
+  }
+
+  if (!isJsonRequest(request)) {
+    return json(
+      { error: "投稿请求格式不正确。" },
+      {
+        status: 400,
+        headers: {
+          "cache-control": "no-store",
+        },
+      },
+    );
+  }
+
   try {
     const body = await parseJsonBody(request);
     const submission = normalizeSubmissionFields(body);
+
+    if (submission.company) {
+      return json(
+        { ok: true },
+        {
+          status: 202,
+          headers: {
+            "cache-control": "no-store",
+          },
+        },
+      );
+    }
+
+    await enforceSubmissionRateLimit(request, env);
     const message = buildSubmissionTelegramMessage(submission, request);
 
     await sendTelegramMessage(env, message);
@@ -1400,6 +1576,19 @@ async function handleSubmissionRequest(request: Request, env: Env): Promise<Resp
       },
     );
   } catch (error) {
+    if (error instanceof SubmissionGuardError) {
+      return json(
+        { error: error.message },
+        {
+          status: error.status,
+          headers: {
+            "cache-control": "no-store",
+            ...error.headers,
+          },
+        },
+      );
+    }
+
     const message = error instanceof Error ? error.message : "Failed to submit site.";
     const isDeliveryError = message === "submission-channel-unavailable"
       || message === "submission-delivery-failed";

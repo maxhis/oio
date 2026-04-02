@@ -2,6 +2,11 @@
 name = "oio"
 main = "./worker/index.ts"
 compatibility_date = "2026-04-01"
+routes = [
+  { pattern = "oio.15tar.com/api/*", zone_name = "15tar.com" },
+  { pattern = "oio.15tar.com/admin", zone_name = "15tar.com" },
+  { pattern = "oio.15tar.com/admin/*", zone_name = "15tar.com" },
+]
 
 [[d1_databases]]
 binding = "DB"

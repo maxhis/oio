@@ -351,6 +351,18 @@
               />
             </label>
 
+            <label class="submission-field submission-field--honeypot" aria-hidden="true">
+              <span class="submission-field__label">Company</span>
+              <input
+                v-model="submissionForm.company"
+                type="text"
+                name="company"
+                tabindex="-1"
+                autocomplete="organization"
+                :disabled="isSubmissionSubmitting"
+              />
+            </label>
+
             <p v-if="submissionErrorMessage" class="submission-feedback submission-feedback--error">
               {{ submissionErrorMessage }}
             </p>
