@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from "vue";
+import { ImagePlus, Link2, Pencil, RefreshCcw, Upload } from "lucide-vue-next";
 import { RouterLink } from "vue-router";
 
 import { categoryIconOptions, categoryIcons } from "../icons";
@@ -13,6 +14,7 @@ import {
   deleteAdminSite,
   loadAdminNavigation,
   loadAdminSession,
+  importAdminSiteLogoUrl,
   reorderAdminCategories,
   reorderAdminSites,
   resolveAdminSiteMetadata,
@@ -24,6 +26,7 @@ import {
   type CategoryInput,
   type ResolvedSiteMetadata,
   type SiteInput,
+  uploadAdminSiteLogoFile,
 } from "../services/admin";
 
 type FormMode = "create" | "edit";
@@ -46,6 +49,12 @@ const errorMessage = ref("");
 const siteMetadata = ref<ResolvedSiteMetadata | null>(null);
 const siteMetadataStatus = ref<"idle" | "loading" | "success" | "error">("idle");
 const siteMetadataMessage = ref("");
+const siteCustomIconPreviewUrl = ref("");
+const isSiteLogoEditorOpen = ref(false);
+const siteLogoEditorMode = ref<"upload" | "url">("upload");
+const siteRemoteIconUrl = ref("");
+const siteLogoStatus = ref<"idle" | "loading" | "success" | "error">("idle");
+const siteLogoMessage = ref("");
 const siteAutofillSnapshot = ref({
   title: "",
   subTitle: "",
@@ -158,7 +167,11 @@ function isExternalHttpUrl(value: string): boolean {
 }
 
 const siteIconPreviewUrl = computed(() => {
-  if (siteMetadata.value?.iconUrl) {
+  if (siteCustomIconPreviewUrl.value) {
+    return siteCustomIconPreviewUrl.value;
+  }
+
+  if (siteMetadata.value?.iconUrl && siteMetadata.value.icon === siteDraft.value.icon) {
     return siteMetadata.value.iconUrl;
   }
 
@@ -185,6 +198,30 @@ const siteMetadataStatusText = computed(() => {
   }
 
   return siteMetadataMessage.value || "输入跳转链接后会自动解析标题、简介和图标。";
+});
+
+const siteLogoStatusText = computed(() => {
+  if (siteLogoStatus.value === "loading") {
+    return siteLogoMessage.value || "正在处理 logo…";
+  }
+
+  if (siteLogoStatus.value === "success") {
+    return siteLogoMessage.value || "Logo 已更新。";
+  }
+
+  if (siteLogoStatus.value === "error") {
+    return siteLogoMessage.value || "Logo 处理失败。";
+  }
+
+  if (siteCustomIconPreviewUrl.value) {
+    return "当前使用手动设置的 logo，已保存到 R2。";
+  }
+
+  if (siteMetadata.value?.icon === siteDraft.value.icon) {
+    return "当前预览来自自动解析结果；点击创建/保存时会写入 R2。";
+  }
+
+  return "可上传本地图片，或输入远程图片链接后导入到 R2。";
 });
 
 function getCategoryIcon(icon: string) {
@@ -216,6 +253,12 @@ function resetSiteMetadataState() {
   siteMetadata.value = null;
   siteMetadataStatus.value = "idle";
   siteMetadataMessage.value = "";
+  siteCustomIconPreviewUrl.value = "";
+  isSiteLogoEditorOpen.value = false;
+  siteLogoEditorMode.value = "upload";
+  siteRemoteIconUrl.value = "";
+  siteLogoStatus.value = "idle";
+  siteLogoMessage.value = "";
   siteAutofillSnapshot.value = {
     title: "",
     subTitle: "",
@@ -282,6 +325,86 @@ function fillSiteDraft(site: AdminSite | null, fallbackCategoryId = selectedCate
     }
     : createEmptySiteInput(fallbackCategoryId);
   resetSiteMetadataState();
+
+  if (site) {
+    siteCustomIconPreviewUrl.value = buildAdminIconUrl(site.icon);
+    siteLogoStatus.value = "success";
+    siteLogoMessage.value = "当前使用已保存的 logo。";
+  }
+}
+
+function setSiteLogoStatus(status: "idle" | "loading" | "success" | "error", message = "") {
+  siteLogoStatus.value = status;
+  siteLogoMessage.value = message;
+}
+
+function applySiteIcon(icon: string, previewUrl: string, message: string) {
+  shouldSkipNextSiteLookup = true;
+  siteDraft.value.icon = icon;
+  siteCustomIconPreviewUrl.value = previewUrl;
+  setSiteLogoStatus("success", message);
+}
+
+function toggleSiteLogoEditor() {
+  isSiteLogoEditorOpen.value = !isSiteLogoEditorOpen.value;
+}
+
+async function handleSiteLogoFileChange(event: Event) {
+  const input = event.target as HTMLInputElement | null;
+  const file = input?.files?.[0];
+
+  if (!file) {
+    return;
+  }
+
+  busyKey.value = "upload-logo";
+  clearFeedback();
+  setSiteLogoStatus("loading", `正在上传 ${file.name}…`);
+
+  try {
+    const uploadedLogo = await uploadAdminSiteLogoFile(file, siteDraft.value.url);
+    applySiteIcon(uploadedLogo.icon, uploadedLogo.iconUrl, "Logo 已上传到 R2。");
+  } catch (error) {
+    setSiteLogoStatus("error", error instanceof Error ? error.message : "Logo 上传失败。");
+  } finally {
+    busyKey.value = "";
+
+    if (input) {
+      input.value = "";
+    }
+  }
+}
+
+async function submitRemoteSiteLogo() {
+  if (!siteRemoteIconUrl.value.trim()) {
+    setSiteLogoStatus("error", "请先输入远程图片链接。");
+    return;
+  }
+
+  busyKey.value = "upload-logo";
+  clearFeedback();
+  setSiteLogoStatus("loading", "正在导入远程 logo…");
+
+  try {
+    const uploadedLogo = await importAdminSiteLogoUrl(siteRemoteIconUrl.value, siteDraft.value.url);
+    applySiteIcon(uploadedLogo.icon, uploadedLogo.iconUrl, "远程 logo 已导入并保存到 R2。");
+    siteRemoteIconUrl.value = "";
+  } catch (error) {
+    setSiteLogoStatus("error", error instanceof Error ? error.message : "远程 logo 导入失败。");
+  } finally {
+    busyKey.value = "";
+  }
+}
+
+function restoreResolvedSiteLogo() {
+  if (!siteMetadata.value) {
+    return;
+  }
+
+  shouldSkipNextSiteLookup = true;
+  siteDraft.value.icon = siteMetadata.value.icon;
+  siteCustomIconPreviewUrl.value = "";
+  setSiteLogoStatus("success", "已恢复为自动解析的 logo 预览。");
 }
 
 function applySelection(nextCategoryId?: number | null, nextSiteId?: number | null) {
@@ -434,7 +557,10 @@ async function resolveSiteMetadataForUrl(rawUrl = siteDraft.value.url, force = f
 
     shouldSkipNextSiteLookup = true;
     siteDraft.value.url = metadata.url;
-    siteDraft.value.icon = metadata.icon;
+    if (metadata.icon && shouldApplyAutofill(siteDraft.value.icon, previousAutoFill.icon)) {
+      siteDraft.value.icon = metadata.icon;
+      siteCustomIconPreviewUrl.value = "";
+    }
 
     if (metadata.title && shouldApplyAutofill(siteDraft.value.title, previousAutoFill.title)) {
       siteDraft.value.title = metadata.title;
@@ -989,12 +1115,107 @@ onUnmounted(() => {
               <div class="admin-site-preview">
                 <div class="admin-site-preview__icon">
                   <img :src="siteIconPreviewUrl" :alt="sitePreviewTitle" width="72" height="72" />
+                  <button
+                    type="button"
+                    class="admin-site-preview__edit"
+                    :aria-pressed="isSiteLogoEditorOpen ? 'true' : 'false'"
+                    :disabled="isBusy()"
+                    @click="toggleSiteLogoEditor"
+                  >
+                    <Pencil :size="16" :stroke-width="2.2" />
+                  </button>
                 </div>
                 <div class="admin-site-preview__content">
                   <div class="admin-site-preview__eyebrow">站点卡片预览</div>
                   <strong>{{ sitePreviewTitle }}</strong>
                   <p>{{ sitePreviewSubTitle }}</p>
                   <span>{{ sitePreviewDisplayLink }}</span>
+                </div>
+              </div>
+
+              <div v-if="isSiteLogoEditorOpen" class="admin-site-logo-editor">
+                <div class="admin-site-logo-editor__toolbar">
+                  <button
+                    type="button"
+                    class="admin-site-logo-editor__tab"
+                    :class="{ 'is-active': siteLogoEditorMode === 'upload' }"
+                    :disabled="isBusy()"
+                    @click="siteLogoEditorMode = 'upload'"
+                  >
+                    <Upload :size="15" :stroke-width="2.1" />
+                    <span>本地上传</span>
+                  </button>
+                  <button
+                    type="button"
+                    class="admin-site-logo-editor__tab"
+                    :class="{ 'is-active': siteLogoEditorMode === 'url' }"
+                    :disabled="isBusy()"
+                    @click="siteLogoEditorMode = 'url'"
+                  >
+                    <Link2 :size="15" :stroke-width="2.1" />
+                    <span>远程链接</span>
+                  </button>
+                  <button
+                    v-if="siteMetadata"
+                    type="button"
+                    class="admin-site-logo-editor__ghost"
+                    :disabled="isBusy()"
+                    @click="restoreResolvedSiteLogo"
+                  >
+                    <RefreshCcw :size="15" :stroke-width="2.1" />
+                    <span>恢复解析</span>
+                  </button>
+                </div>
+
+                <div v-if="siteLogoEditorMode === 'upload'" class="admin-site-logo-editor__panel">
+                  <label class="admin-site-logo-uploader">
+                    <input
+                      type="file"
+                      accept="image/png,image/jpeg,image/webp,image/svg+xml,image/x-icon,image/vnd.microsoft.icon,image/avif,image/gif"
+                      :disabled="isBusy()"
+                      @change="handleSiteLogoFileChange"
+                    />
+                    <span class="admin-site-logo-uploader__icon">
+                      <ImagePlus :size="18" :stroke-width="2" />
+                    </span>
+                    <span class="admin-site-logo-uploader__copy">
+                      <strong>选择本地图片</strong>
+                      <small>支持 PNG、JPG、WEBP、SVG、ICO、AVIF、GIF，上传后立即保存到 R2。</small>
+                    </span>
+                  </label>
+                </div>
+
+                <div v-else class="admin-site-logo-editor__panel admin-site-logo-editor__panel--url">
+                  <label class="admin-field admin-field--full">
+                    <span>远程图片链接</span>
+                    <div class="admin-site-link-input-row">
+                      <input
+                        v-model="siteRemoteIconUrl"
+                        type="text"
+                        inputmode="url"
+                        autocomplete="off"
+                        placeholder="https://example.com/logo.png"
+                      />
+                      <button
+                        type="button"
+                        class="admin-button"
+                        :disabled="isBusy() || !siteRemoteIconUrl.trim()"
+                        @click="submitRemoteSiteLogo"
+                      >
+                        导入
+                      </button>
+                    </div>
+                  </label>
+                </div>
+
+                <div
+                  class="admin-site-logo-editor__status"
+                  :class="{
+                    'is-loading': siteLogoStatus === 'loading',
+                    'is-error': siteLogoStatus === 'error',
+                  }"
+                >
+                  {{ siteLogoStatusText }}
                 </div>
               </div>
 

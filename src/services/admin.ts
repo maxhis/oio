@@ -56,6 +56,11 @@ export interface ResolvedSiteMetadata {
   iconUrl: string;
 }
 
+export interface UploadedAdminLogo {
+  icon: string;
+  iconUrl: string;
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`${API_BASE_URL}${path}`, {
     ...init,
@@ -191,5 +196,32 @@ export async function resolveAdminSiteMetadata(url: string): Promise<ResolvedSit
       "content-type": "application/json",
     },
     body: JSON.stringify({ url }),
+  });
+}
+
+export async function uploadAdminSiteLogoFile(file: File, siteUrl = ""): Promise<UploadedAdminLogo> {
+  const formData = new FormData();
+  formData.set("file", file);
+
+  if (siteUrl.trim()) {
+    formData.set("siteUrl", siteUrl.trim());
+  }
+
+  return request<UploadedAdminLogo>("/api/admin/logos", {
+    method: "POST",
+    body: formData,
+  });
+}
+
+export async function importAdminSiteLogoUrl(imageUrl: string, siteUrl = ""): Promise<UploadedAdminLogo> {
+  return request<UploadedAdminLogo>("/api/admin/logos", {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({
+      url: imageUrl.trim(),
+      siteUrl: siteUrl.trim(),
+    }),
   });
 }

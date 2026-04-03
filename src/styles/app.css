@@ -1561,6 +1561,7 @@ img {
 }
 
 .admin-site-preview__icon {
+  position: relative;
   display: grid;
   place-items: center;
   width: 5.4rem;
@@ -1576,6 +1577,37 @@ img {
   width: 4.2rem;
   height: 4.2rem;
   object-fit: contain;
+}
+
+.admin-site-preview__edit {
+  position: absolute;
+  top: -0.45rem;
+  right: -0.45rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  border: 0;
+  border-radius: 999px;
+  background: linear-gradient(135deg, rgba(31, 122, 90, 0.96), rgba(18, 91, 66, 0.92));
+  color: #fff;
+  box-shadow: 0 12px 24px rgba(18, 91, 66, 0.24);
+  cursor: pointer;
+  transition:
+    transform 180ms ease,
+    box-shadow 180ms ease,
+    opacity 180ms ease;
+}
+
+.admin-site-preview__edit:hover:not(:disabled) {
+  transform: translateY(-1px) scale(1.03);
+  box-shadow: 0 16px 30px rgba(18, 91, 66, 0.28);
+}
+
+.admin-site-preview__edit:disabled {
+  cursor: not-allowed;
+  opacity: 0.58;
 }
 
 .admin-site-preview__content {
@@ -1615,6 +1647,123 @@ img {
   color: var(--accent-strong);
   font-size: 0.88rem;
   line-height: 1.55;
+}
+
+.admin-site-logo-editor {
+  grid-column: 1 / -1;
+  display: grid;
+  gap: 0.8rem;
+  padding: 0.95rem;
+  border-radius: 1.1rem;
+  border: 1px solid rgba(76, 61, 46, 0.08);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.88), rgba(249, 244, 236, 0.84));
+}
+
+.admin-site-logo-editor__toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+  align-items: center;
+}
+
+.admin-site-logo-editor__tab,
+.admin-site-logo-editor__ghost {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  min-height: 2.4rem;
+  padding: 0.55rem 0.82rem;
+  border-radius: 999px;
+  border: 1px solid rgba(76, 61, 46, 0.08);
+  background: rgba(255, 255, 255, 0.82);
+  color: var(--text-color);
+  cursor: pointer;
+  transition:
+    transform 180ms ease,
+    border-color 180ms ease,
+    background 180ms ease;
+}
+
+.admin-site-logo-editor__tab.is-active {
+  border-color: rgba(31, 122, 90, 0.22);
+  background: rgba(31, 122, 90, 0.1);
+  color: var(--accent-strong);
+}
+
+.admin-site-logo-editor__tab:hover:not(:disabled),
+.admin-site-logo-editor__ghost:hover:not(:disabled) {
+  transform: translateY(-1px);
+}
+
+.admin-site-logo-editor__tab:disabled,
+.admin-site-logo-editor__ghost:disabled {
+  cursor: not-allowed;
+  opacity: 0.58;
+}
+
+.admin-site-logo-editor__panel {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.admin-site-logo-uploader {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 0.8rem;
+  align-items: center;
+  padding: 0.95rem 1rem;
+  border-radius: 1rem;
+  border: 1px dashed rgba(31, 122, 90, 0.32);
+  background: rgba(252, 255, 253, 0.92);
+  cursor: pointer;
+}
+
+.admin-site-logo-uploader input {
+  display: none;
+}
+
+.admin-site-logo-uploader__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.7rem;
+  height: 2.7rem;
+  border-radius: 0.95rem;
+  background: rgba(31, 122, 90, 0.1);
+  color: var(--accent-strong);
+}
+
+.admin-site-logo-uploader__copy {
+  display: grid;
+  gap: 0.18rem;
+}
+
+.admin-site-logo-uploader__copy strong {
+  font-size: 0.96rem;
+}
+
+.admin-site-logo-uploader__copy small {
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+.admin-site-logo-editor__status {
+  padding: 0.82rem 0.9rem;
+  border-radius: 0.9rem;
+  background: rgba(31, 122, 90, 0.08);
+  color: var(--accent-strong);
+  line-height: 1.5;
+}
+
+.admin-site-logo-editor__status.is-loading {
+  background: rgba(214, 147, 24, 0.12);
+  color: rgba(130, 86, 7, 0.95);
+}
+
+.admin-site-logo-editor__status.is-error {
+  background: rgba(207, 78, 54, 0.12);
+  color: rgba(149, 39, 18, 0.94);
 }
 
 .admin-site-lookup-status.is-loading {
@@ -2106,6 +2255,16 @@ img {
   .admin-site-link-input-row,
   .admin-site-preview {
     grid-template-columns: 1fr;
+  }
+
+  .admin-site-logo-editor__toolbar {
+    align-items: stretch;
+  }
+
+  .admin-site-logo-editor__tab,
+  .admin-site-logo-editor__ghost,
+  .admin-site-logo-uploader {
+    width: 100%;
   }
 
   .admin-modal-backdrop {

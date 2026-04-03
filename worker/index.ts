@@ -107,6 +107,11 @@ interface PreparedSiteIcon {
   contentType: string;
 }
 
+interface StoredAdminLogo {
+  icon: string;
+  iconUrl: string;
+}
+
 interface SiteSubmissionPayload {
   website: string;
   description: string;
@@ -119,6 +124,7 @@ const NAVIGATION_CACHE_CONTROL = "public, max-age=300, stale-while-revalidate=36
 const HOME_PAGE_CACHE_CONTROL = "public, max-age=300, stale-while-revalidate=3600";
 const SITE_LOOKUP_USER_AGENT =
   "Mozilla/5.0 (compatible; oio-site-metadata/1.0; +https://oio.15tar.com)";
+const ADMIN_LOGO_MAX_BYTES = 2_500_000;
 const SUBMISSION_SHORT_WINDOW_MS = 60 * 1000;
 const SUBMISSION_LONG_WINDOW_MS = 24 * 60 * 60 * 1000;
 const SUBMISSION_MAX_PER_MINUTE = 3;
@@ -265,6 +271,11 @@ function inferExtensionFromUrl(url: string): string {
   }
 }
 
+function inferExtensionFromFileName(fileName: string): string {
+  const matched = fileName.trim().toLowerCase().match(/\.(svg|png|jpe?g|webp|ico|gif|avif)$/);
+  return matched?.[1] === "jpeg" ? "jpg" : matched?.[1] ?? "";
+}
+
 function inferExtensionFromContentType(contentType: string | null): string {
   const normalizedType = contentType?.toLowerCase() ?? "";
 
@@ -319,6 +330,119 @@ function extractHostname(url: string): string {
   } catch {
     return "";
   }
+}
+
+function buildAdminLogoObjectKey(siteUrl: string, sourceHint: string, bodyHash: string, extension: string): string {
+  const siteHost = sanitizeKeySegment(extractHostname(siteUrl));
+  const sourceSegment = sanitizeKeySegment(sourceHint);
+  const stem = siteHost && siteHost !== "site" ? `${siteHost}-${sourceSegment}` : sourceSegment;
+
+  return `logos/uploads/${stem}-${bodyHash.slice(0, 20)}.${extension}`;
+}
+
+function resolveStoredLogoPayload(objectKey: string): StoredAdminLogo {
+  const icon = toClientIconValue(objectKey);
+
+  return {
+    icon,
+    iconUrl: buildPublicLogoUrl(icon),
+  };
+}
+
+function assertImagePayload(contentType: string | null, sourceHint: string): void {
+  const normalizedType = contentType?.split(";")[0]?.trim().toLowerCase() ?? "";
+  const inferredExtension = inferExtensionFromContentType(normalizedType)
+    || inferExtensionFromUrl(sourceHint)
+    || inferExtensionFromFileName(sourceHint);
+
+  if (normalizedType && normalizedType.startsWith("image/")) {
+    return;
+  }
+
+  if (inferredExtension) {
+    return;
+  }
+
+  throw new Error("Logo 文件必须是可识别的图片格式。");
+}
+
+async function storeAdminLogoBuffer(
+  env: Env,
+  body: ArrayBuffer,
+  options: {
+    siteUrl?: string;
+    sourceUrl?: string;
+    sourceName?: string;
+    contentType?: string | null;
+  },
+): Promise<StoredAdminLogo> {
+  if (body.byteLength === 0) {
+    throw new Error("Logo 文件为空。");
+  }
+
+  if (body.byteLength > ADMIN_LOGO_MAX_BYTES) {
+    throw new Error("Logo 图片不能超过 2.5 MB。");
+  }
+
+  const sourceHint = options.sourceUrl || options.sourceName || "";
+  assertImagePayload(options.contentType ?? null, sourceHint);
+  const objectKeySourceHint = extractHostname(options.sourceUrl ?? "")
+    || options.sourceName
+    || sourceHint
+    || "manual-logo";
+
+  const extension = inferExtensionFromContentType(options.contentType ?? null)
+    || inferExtensionFromUrl(options.sourceUrl ?? "")
+    || inferExtensionFromFileName(options.sourceName ?? "")
+    || "png";
+  const bodyHash = await sha1Hex(body);
+  const objectKey = buildAdminLogoObjectKey(
+    options.siteUrl ?? "",
+    objectKeySourceHint,
+    bodyHash,
+    extension,
+  );
+  const existingObject = await env.LOGOS.get(objectKey);
+
+  if (!existingObject) {
+    await env.LOGOS.put(objectKey, body, {
+      httpMetadata: {
+        contentType: (options.contentType?.split(";")[0]?.trim().toLowerCase()) || guessContentType(objectKey),
+        cacheControl: LONG_CACHE_CONTROL,
+      },
+    });
+  }
+
+  return resolveStoredLogoPayload(objectKey);
+}
+
+async function importAdminLogoFromRemoteUrl(env: Env, rawUrl: string, siteUrl = ""): Promise<StoredAdminLogo> {
+  const imageUrl = normalizeExternalUrl(rawUrl);
+  const response = await fetch(imageUrl, {
+    redirect: "follow",
+    headers: {
+      Accept: "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
+      "User-Agent": SITE_LOOKUP_USER_AGENT,
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(`拉取远程 logo 失败，状态码 ${response.status}。`);
+  }
+
+  const contentLength = Number.parseInt(response.headers.get("content-length") ?? "", 10);
+
+  if (Number.isFinite(contentLength) && contentLength > ADMIN_LOGO_MAX_BYTES) {
+    throw new Error("远程 logo 图片不能超过 2.5 MB。");
+  }
+
+  const body = await response.arrayBuffer();
+
+  return storeAdminLogoBuffer(env, body, {
+    siteUrl,
+    sourceUrl: response.url || imageUrl,
+    contentType: response.headers.get("content-type"),
+  });
 }
 
 function toHex(buffer: ArrayBuffer): string {
@@ -2234,6 +2358,72 @@ async function handleAdminSiteResolveRequest(request: Request, env: Env): Promis
   }
 }
 
+async function handleAdminLogoRequest(request: Request, env: Env): Promise<Response> {
+  const identity = getAdminIdentity(request, env);
+
+  if (!identity) {
+    return unauthorizedJson();
+  }
+
+  if (request.method !== "POST") {
+    return new Response("Method Not Allowed", {
+      status: 405,
+      headers: {
+        Allow: "POST",
+      },
+    });
+  }
+
+  try {
+    const contentType = request.headers.get("content-type")?.toLowerCase() ?? "";
+
+    if (contentType.includes("multipart/form-data")) {
+      const formData = await request.formData();
+      const fileValue = formData.get("file");
+      const siteUrlValue = formData.get("siteUrl");
+
+      if (!(fileValue instanceof File)) {
+        throw new Error("请先选择一张 logo 图片。");
+      }
+
+      const body = await fileValue.arrayBuffer();
+      const storedLogo = await storeAdminLogoBuffer(env, body, {
+        siteUrl: typeof siteUrlValue === "string" ? siteUrlValue : "",
+        sourceName: fileValue.name,
+        contentType: fileValue.type,
+      });
+
+      return json(storedLogo, {
+        headers: {
+          "cache-control": "private, no-store",
+        },
+      });
+    }
+
+    if (contentType.includes("application/json")) {
+      const body = await parseJsonBody(request);
+      const imageUrl = isRecord(body) ? body.url : undefined;
+      const siteUrl = isRecord(body) && typeof body.siteUrl === "string" ? body.siteUrl : "";
+
+      const storedLogo = await importAdminLogoFromRemoteUrl(
+        env,
+        typeof imageUrl === "string" ? imageUrl : "",
+        siteUrl,
+      );
+
+      return json(storedLogo, {
+        headers: {
+          "cache-control": "private, no-store",
+        },
+      });
+    }
+
+    throw new Error("Logo 上传仅支持 multipart/form-data 或 application/json。");
+  } catch (error) {
+    return badRequest(error instanceof Error ? error.message : "Failed to upload logo.");
+  }
+}
+
 async function handleAdminSiteDetailRequest(request: Request, env: Env, siteId: number): Promise<Response> {
   const identity = getAdminIdentity(request, env);
 
@@ -2426,6 +2616,10 @@ const worker = {
 
     if (url.pathname === "/api/admin/sites/resolve") {
       return handleAdminSiteResolveRequest(request, env);
+    }
+
+    if (url.pathname === "/api/admin/logos") {
+      return handleAdminLogoRequest(request, env);
     }
 
     if (url.pathname === "/api/admin/sites/reorder") {
