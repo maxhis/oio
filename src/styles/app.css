@@ -1603,16 +1603,14 @@ img {
   width: 5.4rem;
   height: 5.4rem;
   border-radius: 1.4rem;
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(246, 239, 228, 0.92));
-  border: 1px solid rgba(76, 61, 46, 0.08);
-  box-shadow: 0 12px 28px rgba(65, 48, 30, 0.08);
+  overflow: hidden;
 }
 
 .admin-site-preview__icon img {
-  width: 4.2rem;
-  height: 4.2rem;
+  width: 100%;
+  height: 100%;
   object-fit: contain;
+  border-radius: inherit;
 }
 
 .admin-site-preview__edit {
@@ -2068,8 +2066,7 @@ img {
   flex: 0 0 auto;
 }
 
-.admin-record__thumb--category,
-.admin-record__thumb--site {
+.admin-record__thumb--category {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -2087,10 +2084,12 @@ img {
 }
 
 .admin-record__thumb--site {
+  display: block;
   width: 3.3rem;
   height: 3.3rem;
+  border-radius: 1rem;
+  overflow: hidden;
   object-fit: contain;
-  padding: 0.45rem;
 }
 
 .admin-record__content {

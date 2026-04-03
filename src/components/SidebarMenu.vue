@@ -69,20 +69,15 @@
     </nav>
 
     <div class="site-sidebar__footer">
-      <RouterLink to="/about" class="site-sidebar__secondary-link">
+      <!-- <RouterLink to="/about" class="site-sidebar__secondary-link">
         <HeartIcon :size="18" :stroke-width="2" />
         <span class="site-sidebar__label">关于本站</span>
-      </RouterLink>
+      </RouterLink> -->
       <button type="button" class="site-sidebar__secondary-link" @click="emit('openSubmissionModal')">
         <MailIcon :size="18" :stroke-width="2" />
         <span class="site-sidebar__label">我要投稿</span>
       </button>
-      <a
-        class="site-sidebar__secondary-link"
-        href="https://github.com/maxhis/oio"
-        target="_blank"
-        rel="noreferrer"
-      >
+      <a class="site-sidebar__secondary-link" href="https://github.com/maxhis/oio" target="_blank" rel="noreferrer">
         <GithubIcon :size="18" :stroke-width="2" />
         <span class="site-sidebar__label">GitHub</span>
       </a>
