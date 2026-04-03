@@ -862,7 +862,11 @@ img {
     border-color 180ms ease;
 }
 
-
+.about-profile__card:hover {
+  transform: translateY(-2px);
+  border-color: rgba(31, 122, 90, 0.18);
+  box-shadow: 0 24px 44px rgba(58, 44, 27, 0.12);
+}
 
 .about-profile__card-head {
   display: flex;
