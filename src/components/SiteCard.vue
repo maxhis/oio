@@ -2,16 +2,29 @@
 import type { SiteLink } from "../data/navigation";
 import { computed } from "vue";
 
+import { trackOutboundClick } from "../services/analytics";
+
 const props = defineProps<{
+  categoryTitle: string;
   site: SiteLink;
 }>();
 
 const iconSrc = computed(() => props.site.iconUrl ?? `/assets/images/logos/${props.site.icon}`);
+
+function handleClick() {
+  trackOutboundClick({
+    categoryTitle: props.categoryTitle,
+    destinationUrl: props.site.url,
+    displayLink: props.site.displayLink,
+    siteTitle: props.site.title,
+  });
+}
 </script>
 
 <template>
   <article class="site-card">
     <a
+      @click="handleClick"
       class="site-card__link"
       :href="site.url"
       target="_blank"

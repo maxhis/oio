@@ -5,3 +5,6 @@ dist
 .pnpm-store
 .wrangler
 .dev.vars
+.env
+.env.local
+.env.*.local

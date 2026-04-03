@@ -108,6 +108,27 @@ pnpm cf:dev
 VITE_API_BASE_URL=http://127.0.0.1:8787
 ```
 
+如果你要启用前端统计，再补上：
+
+```bash
+VITE_GA_MEASUREMENT_ID=G-XXXXXXXXXX
+VITE_CLARITY_PROJECT_ID=xxxxxxxxxx
+```
+
+说明：
+
+- `VITE_GA_MEASUREMENT_ID` 是 GA4 的 Measurement ID，不再支持旧版 `UA-*`
+- `VITE_CLARITY_PROJECT_ID` 是 Microsoft Clarity 项目 ID
+- 任一变量不填，对应脚本就不会注入
+
+如果你使用 Cloudflare 的 Git 自动部署，这两个值应配置在 Cloudflare 项目的构建环境变量里，而不是写进仓库。
+
+原因：
+
+- 这两个 `VITE_*` 变量在 `pnpm build` 阶段注入前端包
+- 自动部署时，真正执行构建的是 Cloudflare
+- `wrangler.toml` 的 `[vars]` 更适合 Worker 运行时变量，不能可靠替代前端构建期变量
+
 ### 本地后台登录
 
 如果你需要本地访问 `/admin`，创建 `.dev.vars`：

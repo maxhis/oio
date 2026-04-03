@@ -28,6 +28,7 @@ function getCategoryIcon(icon: string) {
       <SiteCard
         v-for="site in props.category.sites"
         :key="`${props.category.title}-${site.title}`"
+        :category-title="props.category.title"
         :site="site"
       />
     </div>
