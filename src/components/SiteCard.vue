@@ -29,7 +29,7 @@ function handleClick() {
       :href="site.url"
       target="_blank"
       rel="noreferrer"
-      :title="site.displayLink"
+      :aria-label="`${site.title} (${site.displayLink})`"
     >
       <div class="site-card__icon-wrap">
         <img
@@ -45,7 +45,6 @@ function handleClick() {
       <div class="site-card__body">
         <div class="site-card__title">{{ site.title }}</div>
         <p class="site-card__desc">{{ site.subTitle }}</p>
-        <div class="site-card__meta">{{ site.displayLink }}</div>
       </div>
     </a>
   </article>

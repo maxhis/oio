@@ -1907,14 +1907,13 @@ function renderCategorySections(categories: Category[]): string {
 
         return [
           '<article class="site-card">',
-          `<a class="site-card__link" href="${escapeHtml(site.url)}" target="_blank" rel="noreferrer" title="${escapeHtml(site.displayLink)}">`,
+          `<a class="site-card__link" href="${escapeHtml(site.url)}" target="_blank" rel="noreferrer" aria-label="${escapeHtml(`${site.title} (${site.displayLink})`)}">`,
           '<div class="site-card__icon-wrap">',
           `<img src="${escapeHtml(iconUrl)}" class="site-card__icon" width="44" height="44" alt="${escapeHtml(site.title)}" loading="lazy" decoding="async" />`,
           "</div>",
           '<div class="site-card__body">',
           `<div class="site-card__title">${escapeHtml(site.title)}</div>`,
           `<p class="site-card__desc">${escapeHtml(site.subTitle)}</p>`,
-          `<div class="site-card__meta">${escapeHtml(site.displayLink)}</div>`,
           "</div>",
           "</a>",
           "</article>",

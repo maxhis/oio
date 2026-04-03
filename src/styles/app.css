@@ -890,6 +890,9 @@ img {
 
 .site-card__body {
   min-width: 0;
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
 }
 
 .site-card__title {
@@ -901,8 +904,7 @@ img {
   white-space: nowrap;
 }
 
-.site-card__desc,
-.site-card__meta {
+.site-card__desc {
   overflow: hidden;
   text-overflow: ellipsis;
   display: -webkit-box;
@@ -913,15 +915,9 @@ img {
   margin: 0.35rem 0 0;
   color: var(--muted);
   line-height: 1.55;
-  -webkit-line-clamp: 2;
-}
-
-.site-card__meta {
-  margin-top: 0.7rem;
-  font-size: 0.76rem;
-  color: rgba(31, 122, 90, 0.88);
-  -webkit-line-clamp: 1;
-  word-break: break-all;
+  line-clamp: 3;
+  -webkit-line-clamp: 3;
+  word-break: break-word;
 }
 
 .site-footer {
