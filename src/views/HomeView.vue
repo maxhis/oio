@@ -20,6 +20,7 @@
   const isMobileMenuVisible = ref(false);
   const isSubmissionModalOpen = ref(false);
   const isSubmissionSubmitting = ref(false);
+  const isHomeMotionReady = ref(false);
   const submissionErrorMessage = ref("");
   const submissionSuccessMessage = ref("");
   const submissionForm = ref<SiteSubmissionInput>(createEmptySiteSubmissionInput());
@@ -33,6 +34,8 @@
 
   let scrollFrame = 0;
   let resizeFrame = 0;
+  let motionReadyFrame = 0;
+  let revealObserver: IntersectionObserver | null = null;
   let categoryOffsets: Array<{ title: string; top: number }> = [];
 
   function scrollToCategory(title: string) {
@@ -170,7 +173,74 @@
       resizeFrame = 0;
       measureCategoryOffsets();
       syncActiveCategory();
+      setupRevealObserver();
     });
+  }
+
+  function setupRevealObserver() {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    revealObserver?.disconnect();
+    revealObserver = null;
+
+    const revealTargets = Array.from(document.querySelectorAll<HTMLElement>("[data-reveal]"));
+
+    if (!revealTargets.length) {
+      return;
+    }
+
+    const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+    for (const target of revealTargets) {
+      target.classList.remove("is-reveal-ready");
+
+      if (prefersReducedMotion) {
+        target.classList.add("is-visible");
+      } else {
+        target.classList.remove("is-visible");
+      }
+    }
+
+    if (prefersReducedMotion || typeof IntersectionObserver === "undefined") {
+      for (const target of revealTargets) {
+        target.classList.add("is-visible");
+      }
+
+      return;
+    }
+
+    revealObserver = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          if (!entry.isIntersecting) {
+            continue;
+          }
+
+          const target = entry.target as HTMLElement;
+          target.classList.remove("is-reveal-ready");
+          target.classList.add("is-visible");
+          revealObserver?.unobserve(target);
+        }
+      },
+      {
+        rootMargin: "0px 0px -12% 0px",
+        threshold: 0.16,
+      },
+    );
+
+    const revealBoundary = window.innerHeight * 0.86;
+
+    for (const target of revealTargets) {
+      if (target.getBoundingClientRect().top <= revealBoundary) {
+        target.classList.add("is-visible");
+        continue;
+      }
+
+      target.classList.add("is-reveal-ready");
+      revealObserver.observe(target);
+    }
   }
 
   function scrollToInitialHash() {
@@ -209,6 +279,11 @@
     scrollToInitialHash();
     measureCategoryOffsets();
     syncActiveCategory();
+    setupRevealObserver();
+
+    motionReadyFrame = window.requestAnimationFrame(() => {
+      isHomeMotionReady.value = true;
+    });
   });
 
   onBeforeUnmount(() => {
@@ -220,11 +295,17 @@
       window.cancelAnimationFrame(resizeFrame);
     }
 
+    if (motionReadyFrame) {
+      window.cancelAnimationFrame(motionReadyFrame);
+    }
+
     window.removeEventListener("scroll", requestSyncActiveCategory);
     window.removeEventListener("resize", handleResize);
     window.removeEventListener("keydown", handleWindowKeydown);
     document.body.classList.remove("menu-mobile-open");
     document.body.classList.remove("submission-modal-open");
+    revealObserver?.disconnect();
+    revealObserver = null;
   });
 
   function handleWindowKeydown(event: KeyboardEvent) {
@@ -251,6 +332,7 @@
   <div class="site-shell home-page" :class="{
     'is-collapsed': isSidebarCollapsed,
     'is-mobile-menu-open': isMobileMenuVisible,
+    'home-page--motion-ready': isHomeMotionReady,
   }">
     <SidebarMenu :categories="categories" :active-category="activeCategory" :is-collapsed="isSidebarCollapsed"
       :is-mobile-visible="isMobileMenuVisible" @toggle-sidebar="toggleSidebar" @toggle-mobile-menu="toggleMobileMenu"
@@ -295,93 +377,95 @@
     </main>
 
     <Teleport to="body">
-      <div v-if="isSubmissionModalOpen" class="submission-modal-backdrop" @click.self="closeSubmissionModal">
-        <section class="submission-modal" role="dialog" aria-modal="true" aria-labelledby="submission-modal-title">
-          <header class="submission-modal__header">
-            <div>
-              <p class="site-sidebar__kicker">Share A Site</p>
-              <h2 id="submission-modal-title">推荐一个值得收录的站点</h2>
-              <p>
-                填写站点地址、简介和联系方式后，就可以直接提交投稿。
+      <Transition name="submission-modal-transition">
+        <div v-if="isSubmissionModalOpen" class="submission-modal-backdrop" @click.self="closeSubmissionModal">
+          <section class="submission-modal" role="dialog" aria-modal="true" aria-labelledby="submission-modal-title">
+            <header class="submission-modal__header">
+              <div>
+                <p class="site-sidebar__kicker">Share A Site</p>
+                <h2 id="submission-modal-title">推荐一个值得收录的站点</h2>
+                <p>
+                  填写站点地址、简介和联系方式后，就可以直接提交投稿。
+                </p>
+              </div>
+
+              <button type="button" class="submission-modal__close" aria-label="关闭投稿弹窗" @click="closeSubmissionModal">
+                <CloseIcon :size="18" :stroke-width="2.1" />
+              </button>
+            </header>
+
+            <form class="submission-form" @submit.prevent="submitSubmission">
+              <label class="submission-field">
+                <span class="submission-field__label">网站</span>
+                <input
+                  ref="submissionWebsiteInput"
+                  v-model="submissionForm.website"
+                  type="url"
+                  name="website"
+                  placeholder="https://example.com"
+                  autocomplete="url"
+                  :disabled="isSubmissionSubmitting"
+                />
+              </label>
+
+              <label class="submission-field">
+                <span class="submission-field__label">简介</span>
+                <textarea
+                  v-model="submissionForm.description"
+                  name="description"
+                  rows="5"
+                  maxlength="1200"
+                  placeholder="这个网站解决什么问题，为什么值得长期收藏。"
+                  :disabled="isSubmissionSubmitting"
+                ></textarea>
+                <span class="submission-field__hint">{{ submissionDescriptionLength }}/1200</span>
+              </label>
+
+              <label class="submission-field">
+                <span class="submission-field__label">联系方式 <em>可选</em></span>
+                <input
+                  v-model="submissionForm.contact"
+                  type="text"
+                  name="contact"
+                  maxlength="200"
+                  placeholder="Telegram / 微信 / 邮箱"
+                  autocomplete="off"
+                  :disabled="isSubmissionSubmitting"
+                />
+              </label>
+
+              <label class="submission-field submission-field--honeypot" aria-hidden="true">
+                <span class="submission-field__label">Company</span>
+                <input
+                  v-model="submissionForm.company"
+                  type="text"
+                  name="company"
+                  tabindex="-1"
+                  autocomplete="organization"
+                  :disabled="isSubmissionSubmitting"
+                />
+              </label>
+
+              <p v-if="submissionErrorMessage" class="submission-feedback submission-feedback--error">
+                {{ submissionErrorMessage }}
               </p>
-            </div>
+              <p v-else-if="submissionSuccessMessage" class="submission-feedback submission-feedback--success">
+                {{ submissionSuccessMessage }}
+              </p>
 
-            <button type="button" class="submission-modal__close" aria-label="关闭投稿弹窗" @click="closeSubmissionModal">
-              <CloseIcon :size="18" :stroke-width="2.1" />
-            </button>
-          </header>
-
-          <form class="submission-form" @submit.prevent="submitSubmission">
-            <label class="submission-field">
-              <span class="submission-field__label">网站</span>
-              <input
-                ref="submissionWebsiteInput"
-                v-model="submissionForm.website"
-                type="url"
-                name="website"
-                placeholder="https://example.com"
-                autocomplete="url"
-                :disabled="isSubmissionSubmitting"
-              />
-            </label>
-
-            <label class="submission-field">
-              <span class="submission-field__label">简介</span>
-              <textarea
-                v-model="submissionForm.description"
-                name="description"
-                rows="5"
-                maxlength="1200"
-                placeholder="这个网站解决什么问题，为什么值得长期收藏。"
-                :disabled="isSubmissionSubmitting"
-              ></textarea>
-              <span class="submission-field__hint">{{ submissionDescriptionLength }}/1200</span>
-            </label>
-
-            <label class="submission-field">
-              <span class="submission-field__label">联系方式 <em>可选</em></span>
-              <input
-                v-model="submissionForm.contact"
-                type="text"
-                name="contact"
-                maxlength="200"
-                placeholder="Telegram / 微信 / 邮箱"
-                autocomplete="off"
-                :disabled="isSubmissionSubmitting"
-              />
-            </label>
-
-            <label class="submission-field submission-field--honeypot" aria-hidden="true">
-              <span class="submission-field__label">Company</span>
-              <input
-                v-model="submissionForm.company"
-                type="text"
-                name="company"
-                tabindex="-1"
-                autocomplete="organization"
-                :disabled="isSubmissionSubmitting"
-              />
-            </label>
-
-            <p v-if="submissionErrorMessage" class="submission-feedback submission-feedback--error">
-              {{ submissionErrorMessage }}
-            </p>
-            <p v-else-if="submissionSuccessMessage" class="submission-feedback submission-feedback--success">
-              {{ submissionSuccessMessage }}
-            </p>
-
-            <div class="submission-modal__actions">
-              <button type="button" class="submission-button submission-button--ghost" :disabled="isSubmissionSubmitting"
-                @click="closeSubmissionModal">
-                取消
-              </button>
-              <button type="submit" class="submission-button submission-button--primary" :disabled="isSubmissionSubmitting">
-                {{ isSubmissionSubmitting ? "提交中..." : "发送投稿" }}
-              </button>
-            </div>
-          </form>
-        </section>
-      </div>
+              <div class="submission-modal__actions">
+                <button type="button" class="submission-button submission-button--ghost" :disabled="isSubmissionSubmitting"
+                  @click="closeSubmissionModal">
+                  取消
+                </button>
+                <button type="submit" class="submission-button submission-button--primary" :disabled="isSubmissionSubmitting">
+                  {{ isSubmissionSubmitting ? "提交中..." : "发送投稿" }}
+                </button>
+              </div>
+            </form>
+          </section>
+        </div>
+      </Transition>
     </Teleport>
   </div>
 </template>

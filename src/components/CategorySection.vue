@@ -13,7 +13,7 @@ function getCategoryIcon(icon: string) {
 </script>
 
 <template>
-  <section :id="props.category.title" class="category-section">
+  <section :id="props.category.title" class="category-section reveal-section" data-reveal>
     <header class="category-section__header">
       <h2 class="category-section__title">
         <component
