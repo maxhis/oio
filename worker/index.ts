@@ -98,6 +98,7 @@ interface ResolvedSiteMetadata {
   resolvedUrl: string;
   icon: string;
   iconUrl: string;
+  resolution: "full" | "fallback";
 }
 
 interface PreparedSiteIcon {
@@ -122,6 +123,8 @@ interface SiteSubmissionPayload {
 const LONG_CACHE_CONTROL = "public, max-age=31536000, immutable";
 const NAVIGATION_CACHE_CONTROL = "public, max-age=300, stale-while-revalidate=3600";
 const HOME_PAGE_CACHE_CONTROL = "public, max-age=300, stale-while-revalidate=3600";
+const SITE_LOOKUP_BROWSER_USER_AGENT =
+  "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36";
 const SITE_LOOKUP_USER_AGENT =
   "Mozilla/5.0 (compatible; oio-site-metadata/1.0; +https://oio.15tar.com)";
 const ADMIN_LOGO_MAX_BYTES = 2_500_000;
@@ -333,6 +336,37 @@ function extractHostname(url: string): string {
   }
 }
 
+function buildSiteLookupHeaders(kind: "document" | "image", userAgent = SITE_LOOKUP_BROWSER_USER_AGENT): HeadersInit {
+  return {
+    Accept: kind === "document"
+      ? "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8"
+      : "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
+    "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
+    "Cache-Control": "no-cache",
+    Pragma: "no-cache",
+    "Upgrade-Insecure-Requests": kind === "document" ? "1" : "0",
+    "User-Agent": userAgent,
+  };
+}
+
+function isHtmlContentType(contentType: string | null): boolean {
+  const normalizedType = contentType?.split(";")[0]?.trim().toLowerCase() ?? "";
+
+  return !normalizedType
+    || normalizedType === "text/html"
+    || normalizedType === "application/xhtml+xml";
+}
+
+function isMetadataFetchBlockedStatus(status: number): boolean {
+  return status === 401 || status === 403 || status === 406 || status === 429;
+}
+
+function inferSiteTitleFromUrl(url: string): string {
+  const hostname = extractHostname(url).replace(/^www\./i, "");
+
+  return hostname || url;
+}
+
 function buildAdminLogoObjectKey(siteUrl: string, sourceHint: string, bodyHash: string, extension: string): string {
   const siteHost = sanitizeKeySegment(extractHostname(siteUrl));
   const sourceSegment = sanitizeKeySegment(sourceHint);
@@ -421,10 +455,7 @@ async function importAdminLogoFromRemoteUrl(env: Env, rawUrl: string, siteUrl = 
   const imageUrl = normalizeExternalUrl(rawUrl);
   const response = await fetch(imageUrl, {
     redirect: "follow",
-    headers: {
-      Accept: "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
-      "User-Agent": SITE_LOOKUP_USER_AGENT,
-    },
+    headers: buildSiteLookupHeaders("image"),
   });
 
   if (!response.ok) {
@@ -571,50 +602,49 @@ async function fetchSiteIcon(
   const siteHost = sanitizeKeySegment(extractHostname(siteUrl));
 
   for (const candidateUrl of attemptedUrls) {
-    let response: Response;
+    for (const userAgent of [SITE_LOOKUP_BROWSER_USER_AGENT, SITE_LOOKUP_USER_AGENT]) {
+      let response: Response;
 
-    try {
-      response = await fetch(candidateUrl, {
-        redirect: "follow",
-        headers: {
-          Accept: "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
-          "User-Agent": SITE_LOOKUP_USER_AGENT,
-        },
-      });
-    } catch {
-      continue;
+      try {
+        response = await fetch(candidateUrl, {
+          redirect: "follow",
+          headers: buildSiteLookupHeaders("image", userAgent),
+        });
+      } catch {
+        continue;
+      }
+
+      if (!response.ok) {
+        continue;
+      }
+
+      const contentLength = Number.parseInt(response.headers.get("content-length") ?? "", 10);
+
+      if (Number.isFinite(contentLength) && contentLength > 2_500_000) {
+        continue;
+      }
+
+      const body = await response.arrayBuffer();
+
+      if (body.byteLength === 0) {
+        continue;
+      }
+
+      const extension = inferExtensionFromContentType(response.headers.get("content-type"))
+        || inferExtensionFromUrl(response.url)
+        || inferExtensionFromUrl(candidateUrl)
+        || "png";
+      const bodyHash = await sha1Hex(body);
+      const objectKey = `logos/autofetch/${siteHost}-${bodyHash.slice(0, 20)}.${extension}`;
+      const contentType = resolveContentType(response.headers.get("content-type"), response.url, objectKey);
+
+      return {
+        sourceUrl: response.url || candidateUrl,
+        body,
+        objectKey,
+        contentType,
+      };
     }
-
-    if (!response.ok) {
-      continue;
-    }
-
-    const contentLength = Number.parseInt(response.headers.get("content-length") ?? "", 10);
-
-    if (Number.isFinite(contentLength) && contentLength > 2_500_000) {
-      continue;
-    }
-
-    const body = await response.arrayBuffer();
-
-    if (body.byteLength === 0) {
-      continue;
-    }
-
-    const extension = inferExtensionFromContentType(response.headers.get("content-type"))
-      || inferExtensionFromUrl(response.url)
-      || inferExtensionFromUrl(candidateUrl)
-      || "png";
-    const bodyHash = await sha1Hex(body);
-    const objectKey = `logos/autofetch/${siteHost}-${bodyHash.slice(0, 20)}.${extension}`;
-    const contentType = resolveContentType(response.headers.get("content-type"), response.url, objectKey);
-
-    return {
-      sourceUrl: response.url || candidateUrl,
-      body,
-      objectKey,
-      contentType,
-    };
   }
 
   return null;
@@ -667,47 +697,91 @@ async function persistSiteIconIfNeeded(
 
 async function resolveSiteMetadata(env: Env, rawUrl: string): Promise<ResolvedSiteMetadata> {
   const normalizedUrl = normalizeExternalUrl(rawUrl);
+  void env;
 
-  const response = await fetch(normalizedUrl, {
-    redirect: "follow",
-    headers: {
-      Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-      "User-Agent": SITE_LOOKUP_USER_AGENT,
-    },
-  });
+  let response: Response | null = null;
+  let lastStatus = 0;
+
+  for (const userAgent of [SITE_LOOKUP_BROWSER_USER_AGENT, SITE_LOOKUP_USER_AGENT]) {
+    try {
+      response = await fetch(normalizedUrl, {
+        redirect: "follow",
+        headers: buildSiteLookupHeaders("document", userAgent),
+      });
+    } catch {
+      continue;
+    }
+
+    lastStatus = response.status;
+
+    if (response.ok) {
+      break;
+    }
+
+    if (!isMetadataFetchBlockedStatus(response.status)) {
+      throw new Error(`Failed to fetch site metadata with status ${response.status}.`);
+    }
+  }
+
+  if (!response) {
+    throw new Error("Failed to fetch site metadata.");
+  }
+
+  const resolvedUrl = response.url || normalizedUrl;
+  let extracted: ReturnType<typeof extractDocumentMetadata> | null = null;
+
+  if (response.ok && isHtmlContentType(response.headers.get("content-type"))) {
+    const html = await response.text();
+
+    if (html.trim()) {
+      extracted = extractDocumentMetadata(html);
+    }
+  }
+
+  const resolvedIconCandidates = extracted
+    ? extracted.iconCandidates
+      .map((candidate) => {
+        try {
+          return createAbsoluteUrl(candidate, resolvedUrl);
+        } catch {
+          return "";
+        }
+      })
+      .filter(Boolean)
+    : [];
+  const preparedIcon = await fetchSiteIcon(resolvedUrl, resolvedIconCandidates);
+
+  if (extracted) {
+    return {
+      title: extracted.title || inferSiteTitleFromUrl(resolvedUrl),
+      subTitle: extracted.subTitle,
+      displayLink: normalizedUrl,
+      url: normalizedUrl,
+      resolvedUrl,
+      icon: preparedIcon?.sourceUrl ?? "default.png",
+      iconUrl: preparedIcon?.sourceUrl ?? buildPublicLogoUrl("default.png"),
+      resolution: "full",
+    };
+  }
+
+  if (isMetadataFetchBlockedStatus(lastStatus) || preparedIcon) {
+    return {
+      title: inferSiteTitleFromUrl(resolvedUrl),
+      subTitle: "",
+      displayLink: normalizedUrl,
+      url: normalizedUrl,
+      resolvedUrl,
+      icon: preparedIcon?.sourceUrl ?? "default.png",
+      iconUrl: preparedIcon?.sourceUrl ?? buildPublicLogoUrl("default.png"),
+      resolution: "fallback",
+    };
+  }
 
   if (!response.ok) {
     throw new Error(`Failed to fetch site metadata with status ${response.status}.`);
   }
 
-  const html = await response.text();
-
-  if (!html.trim()) {
-    throw new Error("The target site returned an empty response.");
-  }
-
-  const resolvedUrl = response.url || normalizedUrl;
-  const extracted = extractDocumentMetadata(html);
-  const resolvedIconCandidates = extracted.iconCandidates
-    .map((candidate) => {
-      try {
-        return createAbsoluteUrl(candidate, resolvedUrl);
-      } catch {
-        return "";
-      }
-    })
-    .filter(Boolean);
-  const preparedIcon = await fetchSiteIcon(resolvedUrl, resolvedIconCandidates);
-
-  return {
-    title: extracted.title,
-    subTitle: extracted.subTitle,
-    displayLink: normalizedUrl,
-    url: normalizedUrl,
-    resolvedUrl,
-    icon: preparedIcon?.sourceUrl ?? "default.png",
-    iconUrl: preparedIcon?.sourceUrl ?? buildPublicLogoUrl("default.png"),
-  };
+  throw new Error("The target site returned an empty or unsupported HTML response.");
 }
 
 function stripRuntimeFields(categories: Category[]): Category[] {

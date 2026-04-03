@@ -584,9 +584,11 @@ async function resolveSiteMetadataForUrl(rawUrl = siteDraft.value.url, force = f
 
     siteMetadata.value = metadata;
     siteMetadataStatus.value = "success";
-    siteMetadataMessage.value = metadata.resolvedUrl && metadata.resolvedUrl !== metadata.url
-      ? `已解析并跟随到 ${new URL(metadata.resolvedUrl).hostname}，点击创建/保存时才会上传 logo 到 R2`
-      : `已解析 ${new URL(metadata.url).hostname}，点击创建/保存时才会上传 logo 到 R2`;
+    siteMetadataMessage.value = metadata.resolution === "fallback"
+      ? `站点主页返回受限，已回退解析 ${new URL(metadata.resolvedUrl || metadata.url).hostname} 的基础信息和图标，点击创建/保存时才会上传 logo 到 R2`
+      : metadata.resolvedUrl && metadata.resolvedUrl !== metadata.url
+        ? `已解析并跟随到 ${new URL(metadata.resolvedUrl).hostname}，点击创建/保存时才会上传 logo 到 R2`
+        : `已解析 ${new URL(metadata.url).hostname}，点击创建/保存时才会上传 logo 到 R2`;
     lastResolvedSiteUrl = metadata.url;
 
     shouldSkipNextSiteLookup = true;

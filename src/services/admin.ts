@@ -54,6 +54,7 @@ export interface ResolvedSiteMetadata {
   resolvedUrl: string;
   icon: string;
   iconUrl: string;
+  resolution: "full" | "fallback";
 }
 
 export interface UploadedAdminLogo {
