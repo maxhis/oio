@@ -268,9 +268,9 @@
 
       <section class="hero-panel">
         <div class="hero-panel__content">
-          <h1 class="hero-panel__title">把常用开发资源整理成一份真正可浏览的索引。</h1>
+          <h1 class="hero-panel__title">少翻收藏夹，多写代码。</h1>
           <p class="hero-panel__description">
-            从大前端到大后端，从学习资源到日常工具，把容易遗失在收藏夹里的站点按使用场景归档。
+            把散落在浏览器角落的开发工具、文档与灵感站点，按使用场景整理成一份随时可查的索引。
           </p>
         </div>
         <div class="hero-panel__stats">

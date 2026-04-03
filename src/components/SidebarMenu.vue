@@ -58,12 +58,6 @@
       </div>
     </header>
 
-    <div class="site-sidebar__intro">
-      <p class="site-sidebar__blurb">
-        收集经常回访、值得长期保存的开发资源，把书签整理成真正可浏览的索引。
-      </p>
-    </div>
-
     <nav class="site-sidebar__nav" aria-label="分类导航">
       <button v-for="category in categories" :key="category.title" type="button" class="site-sidebar__link"
         :class="{ 'is-active': activeCategory === category.title }"
