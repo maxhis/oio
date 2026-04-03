@@ -1105,6 +1105,15 @@ onUnmounted(() => {
                   </div>
                 </button>
                 <div class="admin-record__actions">
+                  <a
+                    class="admin-mini-button"
+                    :href="site.url"
+                    target="_blank"
+                    rel="noreferrer noopener"
+                    title="打开目标网站"
+                  >
+                    访问
+                  </a>
                   <button type="button" class="admin-mini-button" :disabled="isBusy()" @click="startEditSite(site.id)">
                     编辑
                   </button>
