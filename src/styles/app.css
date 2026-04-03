@@ -769,6 +769,28 @@ img {
   padding: 2rem 1.35rem;
 }
 
+.about-back {
+  margin-bottom: 1rem;
+}
+
+.about-back__link {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.55rem 1rem;
+  border-radius: 999px;
+  font-size: 0.86rem;
+  color: var(--muted);
+  background: rgba(255, 255, 255, 0.6);
+  border: 1px solid rgba(76, 61, 46, 0.08);
+  transition: color 180ms ease, background-color 180ms ease, transform 180ms ease;
+}
+
+.about-back__link:hover {
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.88);
+  transform: translateX(-2px);
+}
+
 .about-hero {
   padding: 2rem;
   margin-bottom: 1.3rem;
@@ -792,10 +814,9 @@ img {
 
 .about-panel {
   display: grid;
-  grid-template-columns: minmax(0, 1.65fr) minmax(17rem, 22rem);
-  gap: 1.25rem;
-  align-items: start;
-  padding: 1.5rem;
+  grid-template-columns: 1fr;
+  gap: 1.5rem;
+  padding: 1.8rem;
   border-radius: var(--radius-xl);
   background: rgba(255, 252, 248, 0.88);
   border: 1px solid rgba(76, 61, 46, 0.08);
@@ -815,16 +836,23 @@ img {
   display: block;
 }
 
+.about-profile__body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  min-width: 0;
+}
+
 .about-profile__card {
   position: relative;
   display: grid;
-  gap: 0.95rem;
-  min-height: 100%;
-  max-width: none;
-  padding: 1.05rem;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 1.2rem;
+  padding: 1.3rem 1.5rem;
   border-radius: 1.2rem;
   background:
-    radial-gradient(circle at top right, rgba(31, 122, 90, 0.12), transparent 34%),
+    radial-gradient(circle at top right, rgba(31, 122, 90, 0.10), transparent 40%),
     linear-gradient(150deg, rgba(255, 255, 255, 0.96), rgba(247, 239, 227, 0.88));
   border: 1px solid rgba(76, 61, 46, 0.08);
   box-shadow: 0 18px 36px rgba(58, 44, 27, 0.08);
@@ -834,11 +862,7 @@ img {
     border-color 180ms ease;
 }
 
-.about-profile__card:hover {
-  transform: translateY(-2px);
-  border-color: rgba(31, 122, 90, 0.18);
-  box-shadow: 0 24px 44px rgba(58, 44, 27, 0.12);
-}
+
 
 .about-profile__card-head {
   display: flex;
@@ -900,14 +924,21 @@ img {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: fit-content;
+  align-self: center;
+  white-space: nowrap;
   min-height: 2.5rem;
-  padding: 0.65rem 0.95rem;
+  padding: 0.65rem 1.1rem;
   border-radius: 999px;
   background: rgba(31, 122, 90, 0.1);
   color: var(--accent-strong);
   font-size: 0.82rem;
   font-weight: 700;
+  transition: background-color 180ms ease, transform 180ms ease;
+}
+
+.about-profile__action:hover {
+  background: rgba(31, 122, 90, 0.18);
+  transform: translateY(-1px);
 }
 
 .about-hero__title {
@@ -915,7 +946,7 @@ img {
 }
 
 .about-hero__description {
-  max-width: 44rem;
+  max-width: none;
 }
 
 .not-found-page {
