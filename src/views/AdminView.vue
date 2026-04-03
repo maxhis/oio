@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from "vue";
-import { ImagePlus, Link2, Pencil, RefreshCcw, Upload } from "lucide-vue-next";
+import { GripVertical, ImagePlus, Link2, Pencil, RefreshCcw, Upload } from "lucide-vue-next";
 import { RouterLink } from "vue-router";
 
 import { categoryIconOptions, categoryIcons } from "../icons";
@@ -30,6 +30,8 @@ import {
 } from "../services/admin";
 
 type FormMode = "create" | "edit";
+type ReorderTarget = "category" | "site";
+type DropPosition = "before" | "after";
 
 const session = ref<AdminSession | null>(null);
 const source = ref("loading");
@@ -55,6 +57,12 @@ const siteLogoEditorMode = ref<"upload" | "url">("upload");
 const siteRemoteIconUrl = ref("");
 const siteLogoStatus = ref<"idle" | "loading" | "success" | "error">("idle");
 const siteLogoMessage = ref("");
+const dragState = ref<{
+  target: ReorderTarget;
+  sourceId: number;
+  overId: number | null;
+  position: DropPosition;
+} | null>(null);
 const siteAutofillSnapshot = ref({
   title: "",
   subTitle: "",
@@ -247,6 +255,10 @@ function isBusy(key?: string): boolean {
   }
 
   return isLoading.value || busyKey.value === key;
+}
+
+function resetDragState() {
+  dragState.value = null;
 }
 
 function resetSiteMetadataState() {
@@ -734,23 +746,114 @@ async function removeSite(siteId: number) {
   }
 }
 
-async function moveCategory(categoryId: number, direction: -1 | 1) {
-  const currentIndex = categories.value.findIndex((item) => item.id === categoryId);
-  const targetIndex = currentIndex + direction;
+function resolveDropPosition(event: DragEvent): DropPosition {
+  const currentTarget = event.currentTarget;
 
-  if (currentIndex < 0 || targetIndex < 0 || targetIndex >= categories.value.length) {
+  if (!(currentTarget instanceof HTMLElement)) {
+    return "after";
+  }
+
+  const { top, height } = currentTarget.getBoundingClientRect();
+  return event.clientY < top + height / 2 ? "before" : "after";
+}
+
+function buildReorderedIds(
+  itemIds: number[],
+  sourceId: number,
+  targetId: number,
+  position: DropPosition,
+): number[] | null {
+  if (sourceId === targetId) {
+    return null;
+  }
+
+  const sourceIndex = itemIds.indexOf(sourceId);
+  const targetIndex = itemIds.indexOf(targetId);
+
+  if (sourceIndex < 0 || targetIndex < 0) {
+    return null;
+  }
+
+  const nextOrder = itemIds.filter((itemId) => itemId !== sourceId);
+  const insertionIndex = nextOrder.indexOf(targetId);
+
+  if (insertionIndex < 0) {
+    return null;
+  }
+
+  nextOrder.splice(position === "before" ? insertionIndex : insertionIndex + 1, 0, sourceId);
+
+  return nextOrder.every((itemId, index) => itemId === itemIds[index]) ? null : nextOrder;
+}
+
+function beginDrag(target: ReorderTarget, sourceId: number, event: DragEvent) {
+  if (isBusy()) {
+    event.preventDefault();
     return;
   }
 
-  const nextOrder = categories.value.map((item) => item.id);
-  [nextOrder[currentIndex], nextOrder[targetIndex]] = [nextOrder[targetIndex], nextOrder[currentIndex]];
+  dragState.value = {
+    target,
+    sourceId,
+    overId: null,
+    position: "after",
+  };
+
+  if (event.dataTransfer) {
+    event.dataTransfer.effectAllowed = "move";
+    event.dataTransfer.setData("text/plain", String(sourceId));
+  }
+}
+
+function updateDragState(target: ReorderTarget, overId: number, event: DragEvent) {
+  if (!dragState.value || dragState.value.target !== target) {
+    return;
+  }
+
+  event.preventDefault();
+
+  dragState.value = {
+    ...dragState.value,
+    overId,
+    position: resolveDropPosition(event),
+  };
+
+  if (event.dataTransfer) {
+    event.dataTransfer.dropEffect = "move";
+  }
+}
+
+function isDropIndicatorVisible(target: ReorderTarget, itemId: number, position: DropPosition): boolean {
+  return dragState.value?.target === target
+    && dragState.value.sourceId !== itemId
+    && dragState.value.overId === itemId
+    && dragState.value.position === position;
+}
+
+async function dropCategory(targetId: number) {
+  if (!dragState.value || dragState.value.target !== "category") {
+    return;
+  }
+
+  const nextOrder = buildReorderedIds(
+    categories.value.map((category) => category.id),
+    dragState.value.sourceId,
+    targetId,
+    dragState.value.position,
+  );
+
+  resetDragState();
+
+  if (!nextOrder) {
+    return;
+  }
 
   busyKey.value = "reorder-category";
   clearFeedback();
 
   try {
     await reorderAdminCategories(nextOrder);
-    await refreshAdminData({ categoryId });
+    await refreshAdminData({ categoryId: selectedCategoryId.value ?? targetId, siteId: selectedSiteId.value });
     notice.value = "分类顺序已更新。";
   } catch (error) {
     errorMessage.value = error instanceof Error ? error.message : "分类排序失败。";
@@ -759,29 +862,32 @@ async function moveCategory(categoryId: number, direction: -1 | 1) {
   }
 }
 
-async function moveSite(siteId: number, direction: -1 | 1) {
+async function dropSite(targetId: number) {
   const category = selectedCategory.value;
 
-  if (!category) {
+  if (!category || !dragState.value || dragState.value.target !== "site") {
     return;
   }
 
-  const currentIndex = category.sites.findIndex((item) => item.id === siteId);
-  const targetIndex = currentIndex + direction;
+  const nextOrder = buildReorderedIds(
+    category.sites.map((site) => site.id),
+    dragState.value.sourceId,
+    targetId,
+    dragState.value.position,
+  );
 
-  if (currentIndex < 0 || targetIndex < 0 || targetIndex >= category.sites.length) {
+  resetDragState();
+
+  if (!nextOrder) {
     return;
   }
-
-  const nextOrder = category.sites.map((item) => item.id);
-  [nextOrder[currentIndex], nextOrder[targetIndex]] = [nextOrder[targetIndex], nextOrder[currentIndex]];
 
   busyKey.value = "reorder-site";
   clearFeedback();
 
   try {
     await reorderAdminSites(category.id, nextOrder);
-    await refreshAdminData({ categoryId: category.id, siteId });
+    await refreshAdminData({ categoryId: category.id, siteId: selectedSiteId.value ?? targetId });
     notice.value = "站点顺序已更新。";
   } catch (error) {
     errorMessage.value = error instanceof Error ? error.message : "站点排序失败。";
@@ -825,6 +931,7 @@ onUnmounted(() => {
 
   document.body.classList.remove("admin-modal-open");
   clearPendingSiteMetadataLookup();
+  resetDragState();
 });
 </script>
 
@@ -869,7 +976,7 @@ onUnmounted(() => {
           <div class="admin-section__header">
             <div>
               <h2 class="admin-section__title">分类管理</h2>
-              <div class="admin-section__meta">{{ categories.length }} 项</div>
+              <div class="admin-section__meta">{{ categories.length }} 项 · 拖拽卡片即可调整顺序</div>
             </div>
             <button type="button" class="admin-button admin-button--primary" :disabled="isBusy()" @click="startCreateCategory">
               新建分类
@@ -879,11 +986,24 @@ onUnmounted(() => {
           <div class="admin-section__body">
             <div v-if="hasCategories" class="admin-record-list">
               <article
-                v-for="(category, categoryIndex) in categories"
+                v-for="category in categories"
                 :key="category.id"
                 class="admin-record admin-record--category"
-                :class="{ 'is-active': category.id === selectedCategoryId }"
+                :class="{
+                  'is-active': category.id === selectedCategoryId,
+                  'is-dragging': dragState?.target === 'category' && dragState.sourceId === category.id,
+                  'is-drop-before': isDropIndicatorVisible('category', category.id, 'before'),
+                  'is-drop-after': isDropIndicatorVisible('category', category.id, 'after'),
+                }"
+                :draggable="!isBusy()"
+                @dragstart="beginDrag('category', category.id, $event)"
+                @dragover="updateDragState('category', category.id, $event)"
+                @drop.prevent="dropCategory(category.id)"
+                @dragend="resetDragState"
               >
+                <div class="admin-record__handle" aria-hidden="true">
+                  <GripVertical :size="18" :stroke-width="2" />
+                </div>
                 <button type="button" class="admin-record__main" @click="selectCategory(category.id)">
                   <div class="admin-record__thumb admin-record__thumb--category">
                     <component :is="getCategoryIcon(category.icon)" :size="18" :stroke-width="2" />
@@ -894,17 +1014,6 @@ onUnmounted(() => {
                   </div>
                 </button>
                 <div class="admin-record__actions">
-                  <button type="button" class="admin-mini-button" :disabled="isBusy() || categoryIndex === 0" @click="moveCategory(category.id, -1)">
-                    ↑
-                  </button>
-                  <button
-                    type="button"
-                    class="admin-mini-button"
-                    :disabled="isBusy() || categoryIndex === categories.length - 1"
-                    @click="moveCategory(category.id, 1)"
-                  >
-                    ↓
-                  </button>
                   <button type="button" class="admin-mini-button" :disabled="isBusy()" @click="startEditCategory(category.id)">
                     编辑
                   </button>
@@ -923,7 +1032,7 @@ onUnmounted(() => {
             <div>
               <h2 class="admin-section__title">站点管理</h2>
               <div class="admin-section__meta">
-                {{ selectedCategory ? `${selectedCategory.title} · ${sitesInSelectedCategory.length} 项` : "请先选择分类" }}
+                {{ selectedCategory ? `${selectedCategory.title} · ${sitesInSelectedCategory.length} 项 · 拖拽卡片即可调整顺序` : "请先选择分类" }}
               </div>
             </div>
             <button
@@ -939,11 +1048,24 @@ onUnmounted(() => {
           <div class="admin-section__body">
             <div v-if="sitesInSelectedCategory.length" class="admin-record-list admin-record-list--sites">
               <article
-                v-for="(site, siteIndex) in sitesInSelectedCategory"
+                v-for="site in sitesInSelectedCategory"
                 :key="site.id"
                 class="admin-record admin-record--site"
-                :class="{ 'is-active': site.id === selectedSiteId }"
+                :class="{
+                  'is-active': site.id === selectedSiteId,
+                  'is-dragging': dragState?.target === 'site' && dragState.sourceId === site.id,
+                  'is-drop-before': isDropIndicatorVisible('site', site.id, 'before'),
+                  'is-drop-after': isDropIndicatorVisible('site', site.id, 'after'),
+                }"
+                :draggable="!isBusy()"
+                @dragstart="beginDrag('site', site.id, $event)"
+                @dragover="updateDragState('site', site.id, $event)"
+                @drop.prevent="dropSite(site.id)"
+                @dragend="resetDragState"
               >
+                <div class="admin-record__handle" aria-hidden="true">
+                  <GripVertical :size="18" :stroke-width="2" />
+                </div>
                 <button type="button" class="admin-record__main" @click="selectSite(site.id)">
                   <img
                     :src="getSiteIconUrl(site.icon)"
@@ -961,17 +1083,6 @@ onUnmounted(() => {
                   </div>
                 </button>
                 <div class="admin-record__actions">
-                  <button type="button" class="admin-mini-button" :disabled="isBusy() || siteIndex === 0" @click="moveSite(site.id, -1)">
-                    ↑
-                  </button>
-                  <button
-                    type="button"
-                    class="admin-mini-button"
-                    :disabled="isBusy() || siteIndex === sitesInSelectedCategory.length - 1"
-                    @click="moveSite(site.id, 1)"
-                  >
-                    ↓
-                  </button>
                   <button type="button" class="admin-mini-button" :disabled="isBusy()" @click="startEditSite(site.id)">
                     编辑
                   </button>
