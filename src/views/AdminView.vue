@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from "vue";
-import { GripVertical, ImagePlus, Link2, Pencil, RefreshCcw, Upload } from "lucide-vue-next";
+import { GripVertical, ImagePlus, Link2, Pencil, RefreshCcw, Upload, X } from "lucide-vue-next";
 import { RouterLink } from "vue-router";
 
 import { categoryIconOptions, categoryIcons } from "../icons";
@@ -15,6 +15,7 @@ import {
   loadAdminNavigation,
   loadAdminSession,
   importAdminSiteLogoUrl,
+  normalizeAdminSiteUrl,
   reorderAdminCategories,
   reorderAdminSites,
   resolveAdminSiteMetadata,
@@ -296,13 +297,29 @@ function shouldApplyAutofill(currentValue: string, previousAutoValue: string): b
   return !normalizedCurrent || (Boolean(normalizedPrevious) && normalizedCurrent === normalizedPrevious);
 }
 
+function shouldApplyResolvedIcon(currentValue: string, previousAutoValue: string): boolean {
+  return currentValue.trim() === "default.png" || shouldApplyAutofill(currentValue, previousAutoValue);
+}
+
+function normalizeSiteDraftUrl() {
+  const normalizedUrl = normalizeAdminSiteUrl(siteDraft.value.url);
+
+  if (!normalizedUrl || normalizedUrl === siteDraft.value.url) {
+    return normalizedUrl;
+  }
+
+  shouldSkipNextSiteLookup = true;
+  siteDraft.value.url = normalizedUrl;
+  return normalizedUrl;
+}
+
 function createNormalizedSitePayload(input: SiteInput): SiteInput {
   return {
     ...input,
     title: input.title.trim(),
     subTitle: input.subTitle.trim(),
     displayLink: input.displayLink.trim(),
-    url: input.url.trim(),
+    url: normalizeAdminSiteUrl(input.url),
     icon: input.icon.trim() || "default.png",
   };
 }
@@ -542,11 +559,16 @@ function startEditSite(siteId = selectedSiteId.value) {
 }
 
 async function resolveSiteMetadataForUrl(rawUrl = siteDraft.value.url, force = false) {
-  const candidateUrl = rawUrl.trim();
+  const candidateUrl = normalizeAdminSiteUrl(rawUrl);
 
   if (!candidateUrl) {
     resetSiteMetadataState();
     return;
+  }
+
+  if (candidateUrl !== siteDraft.value.url) {
+    shouldSkipNextSiteLookup = true;
+    siteDraft.value.url = candidateUrl;
   }
 
   if (!force && candidateUrl === lastResolvedSiteUrl) {
@@ -569,7 +591,7 @@ async function resolveSiteMetadataForUrl(rawUrl = siteDraft.value.url, force = f
 
     shouldSkipNextSiteLookup = true;
     siteDraft.value.url = metadata.url;
-    if (metadata.icon && shouldApplyAutofill(siteDraft.value.icon, previousAutoFill.icon)) {
+    if (metadata.icon && shouldApplyResolvedIcon(siteDraft.value.icon, previousAutoFill.icon)) {
       siteDraft.value.icon = metadata.icon;
       siteCustomIconPreviewUrl.value = "";
     }
@@ -1210,6 +1232,7 @@ onUnmounted(() => {
                     inputmode="url"
                     autocomplete="off"
                     placeholder="https://example.com"
+                    @blur="normalizeSiteDraftUrl"
                   />
                   <button
                     type="button"
@@ -1230,10 +1253,12 @@ onUnmounted(() => {
                     type="button"
                     class="admin-site-preview__edit"
                     :aria-pressed="isSiteLogoEditorOpen ? 'true' : 'false'"
+                    :aria-label="isSiteLogoEditorOpen ? '收起 Logo 编辑区域' : '展开 Logo 编辑区域'"
                     :disabled="isBusy()"
                     @click="toggleSiteLogoEditor"
                   >
                     <Pencil :size="16" :stroke-width="2.2" />
+                    <span>{{ isSiteLogoEditorOpen ? "收起" : "换 Logo" }}</span>
                   </button>
                 </div>
                 <div class="admin-site-preview__content">
@@ -1245,6 +1270,21 @@ onUnmounted(() => {
               </div>
 
               <div v-if="isSiteLogoEditorOpen" class="admin-site-logo-editor">
+                <div class="admin-site-logo-editor__header">
+                  <div class="admin-site-logo-editor__intro">
+                    <strong>Logo 编辑区</strong>
+                    <span>上传或导入完成后可直接收起，当前预览会保留。</span>
+                  </div>
+                  <button
+                    type="button"
+                    class="admin-site-logo-editor__close"
+                    :disabled="isBusy()"
+                    @click="toggleSiteLogoEditor"
+                  >
+                    <X :size="15" :stroke-width="2.2" />
+                    <span>收起</span>
+                  </button>
+                </div>
                 <div class="admin-site-logo-editor__toolbar">
                   <button
                     type="button"

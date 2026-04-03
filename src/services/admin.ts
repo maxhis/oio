@@ -61,6 +61,11 @@ export interface UploadedAdminLogo {
   iconUrl: string;
 }
 
+function toNormalizedHttpUrlString(parsedUrl: URL): string {
+  const normalizedPathname = parsedUrl.pathname.replace(/\/+$/, "");
+  return `${parsedUrl.protocol}//${parsedUrl.host}${normalizedPathname}${parsedUrl.search}${parsedUrl.hash}`;
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`${API_BASE_URL}${path}`, {
     ...init,
@@ -107,6 +112,28 @@ export function createEmptySiteInput(categoryId = 0): SiteInput {
 
 export function buildAdminIconUrl(icon: string): string {
   return buildPublicLogoUrl(icon);
+}
+
+export function normalizeAdminSiteUrl(value: string): string {
+  const raw = value.trim();
+
+  if (!raw) {
+    return "";
+  }
+
+  const candidate = /^[a-zA-Z][a-zA-Z\d+\-.]*:/.test(raw) ? raw : `https://${raw}`;
+
+  try {
+    const parsedUrl = new URL(candidate);
+
+    if (parsedUrl.protocol !== "http:" && parsedUrl.protocol !== "https:") {
+      return raw;
+    }
+
+    return toNormalizedHttpUrlString(parsedUrl);
+  } catch {
+    return raw;
+  }
 }
 
 export async function loadAdminSession(): Promise<AdminSession> {

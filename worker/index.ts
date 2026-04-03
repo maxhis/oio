@@ -240,7 +240,8 @@ function normalizeExternalUrl(value: unknown): string {
     throw new Error("Site url must use http or https.");
   }
 
-  return parsedUrl.toString();
+  const normalizedPathname = parsedUrl.pathname.replace(/\/+$/, "");
+  return `${parsedUrl.protocol}//${parsedUrl.host}${normalizedPathname}${parsedUrl.search}${parsedUrl.hash}`;
 }
 
 function isExternalHttpUrl(value: string): boolean {
@@ -1359,15 +1360,24 @@ async function ensureSiteFieldsAvailable(
     throw new Error(`Site title "${title}" already exists in this category.`);
   }
 
-  const duplicateUrl = excludeId
+  const { results: siteRows } = excludeId
     ? await env.DB
-      .prepare("SELECT id FROM sites WHERE category_id = ? AND url = ? AND id != ?")
-      .bind(categoryId, url, excludeId)
-      .first<number>("id")
+      .prepare("SELECT id, url FROM sites WHERE category_id = ? AND id != ?")
+      .bind(categoryId, excludeId)
+      .all<{ id: number; url: string }>()
     : await env.DB
-      .prepare("SELECT id FROM sites WHERE category_id = ? AND url = ?")
-      .bind(categoryId, url)
-      .first<number>("id");
+      .prepare("SELECT id, url FROM sites WHERE category_id = ?")
+      .bind(categoryId)
+      .all<{ id: number; url: string }>();
+
+  const normalizedUrl = normalizeExternalUrl(url);
+  const duplicateUrl = siteRows.find((site) => {
+    try {
+      return normalizeExternalUrl(site.url) === normalizedUrl;
+    } catch {
+      return site.url.trim() === normalizedUrl;
+    }
+  })?.id;
 
   if (duplicateUrl) {
     throw new Error(`Site URL "${url}" already exists in this category.`);
