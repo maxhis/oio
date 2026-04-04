@@ -1260,20 +1260,22 @@ onUnmounted(() => {
               <div class="admin-site-preview">
                 <div class="admin-site-preview__icon">
                   <img :src="siteIconPreviewUrl" :alt="sitePreviewTitle" width="72" height="72" />
-                  <button
-                    type="button"
-                    class="admin-site-preview__edit"
-                    :aria-pressed="isSiteLogoEditorOpen ? 'true' : 'false'"
-                    :aria-label="isSiteLogoEditorOpen ? '收起 Logo 编辑区域' : '展开 Logo 编辑区域'"
-                    :disabled="isBusy()"
-                    @click="toggleSiteLogoEditor"
-                  >
-                    <Pencil :size="16" :stroke-width="2.2" />
-                    <span>{{ isSiteLogoEditorOpen ? "收起" : "换 Logo" }}</span>
-                  </button>
                 </div>
                 <div class="admin-site-preview__content">
-                  <div class="admin-site-preview__eyebrow">站点卡片预览</div>
+                  <div class="admin-site-preview__topline">
+                    <div class="admin-site-preview__eyebrow">站点卡片预览</div>
+                    <button
+                      type="button"
+                      class="admin-site-preview__edit"
+                      :aria-pressed="isSiteLogoEditorOpen ? 'true' : 'false'"
+                      :aria-label="isSiteLogoEditorOpen ? '收起 Logo 编辑区域' : '展开 Logo 编辑区域'"
+                      :disabled="isBusy()"
+                      @click="toggleSiteLogoEditor"
+                    >
+                      <Pencil :size="16" :stroke-width="2.2" />
+                      <span>{{ isSiteLogoEditorOpen ? "收起" : "换 Logo" }}</span>
+                    </button>
+                  </div>
                   <strong>{{ sitePreviewTitle }}</strong>
                   <p>{{ sitePreviewSubTitle }}</p>
                   <span>{{ sitePreviewDisplayLink }}</span>
