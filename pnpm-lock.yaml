@@ -26,13 +26,13 @@ importers:
         version: 25.5.0
       '@vitejs/plugin-vue':
         specifier: ^5.0.4
-        version: 5.2.4(vite@6.4.1(@types/node@25.5.0))(vue@3.5.31(typescript@5.9.3))
+        version: 5.2.4(vite@6.4.2(@types/node@25.5.0))(vue@3.5.31(typescript@5.9.3))
       typescript:
         specifier: ^5.4.5
         version: 5.9.3
       vite:
-        specifier: ^6.0.0
-        version: 6.4.1(@types/node@25.5.0)
+        specifier: ^6.4.2
+        version: 6.4.2(@types/node@25.5.0)
       vue-tsc:
         specifier: ^2.0.6
         version: 2.2.12(typescript@5.9.3)
@@ -994,8 +994,8 @@ packages:
   unenv@2.0.0-rc.24:
     resolution: {integrity: sha512-i7qRCmY42zmCwnYlh9H2SvLEypEFGye5iRmEMKjcGi7zk9UquigRjFtTLz0TYqr0ZGLZhaMHl/foy1bZR+Cwlw==}
 
-  vite@6.4.1:
-    resolution: {integrity: sha512-+Oxm7q9hDoLMyJOYfUYBuHQo+dkAloi33apOPP56pzj+vsdJDzr+j1NISE5pyaAuKL4A3UD34qd0lx5+kfKp2g==}
+  vite@6.4.2:
+    resolution: {integrity: sha512-2N/55r4JDJ4gdrCvGgINMy+HH3iRpNIz8K6SFwVsA+JbQScLiC+clmAxBgwiSPgcG9U15QmvqCGWzMbqda5zGQ==}
     engines: {node: ^18.0.0 || ^20.0.0 || >=22.0.0}
     hasBin: true
     peerDependencies:
@@ -1503,9 +1503,9 @@ snapshots:
     dependencies:
       undici-types: 7.18.2
 
-  '@vitejs/plugin-vue@5.2.4(vite@6.4.1(@types/node@25.5.0))(vue@3.5.31(typescript@5.9.3))':
+  '@vitejs/plugin-vue@5.2.4(vite@6.4.2(@types/node@25.5.0))(vue@3.5.31(typescript@5.9.3))':
     dependencies:
-      vite: 6.4.1(@types/node@25.5.0)
+      vite: 6.4.2(@types/node@25.5.0)
       vue: 3.5.31(typescript@5.9.3)
 
   '@volar/language-core@2.4.15':
@@ -1909,7 +1909,7 @@ snapshots:
     dependencies:
       pathe: 2.0.3
 
-  vite@6.4.1(@types/node@25.5.0):
+  vite@6.4.2(@types/node@25.5.0):
     dependencies:
       esbuild: 0.25.12
       fdir: 6.5.0(picomatch@4.0.4)
