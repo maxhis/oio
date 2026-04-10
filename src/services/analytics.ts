@@ -11,7 +11,9 @@ type AnalyticsEventValue = string | number | boolean | undefined;
 type AnalyticsEventParams = Record<string, AnalyticsEventValue>;
 
 let hasInitializedAnalytics = false;
-let lastTrackedPath = "";
+let hasInitializedClarity = false;
+let lastGaTrackedPath = "";
+let lastClarityTrackedPath = "";
 
 function isBrowser() {
   return typeof window !== "undefined" && typeof document !== "undefined";
@@ -63,7 +65,7 @@ function initGoogleAnalytics() {
 }
 
 function initClarity() {
-  if (!isBrowser() || !CLARITY_PROJECT_ID) {
+  if (!isBrowser() || !CLARITY_PROJECT_ID || hasInitializedClarity) {
     return;
   }
 
@@ -79,6 +81,7 @@ function initClarity() {
 
   window.clarity = clarity;
   ensureScript(CLARITY_SCRIPT_ID, `https://www.clarity.ms/tag/${CLARITY_PROJECT_ID}`);
+  hasInitializedClarity = true;
 }
 
 function readRouteTitle(route: RouteLocationNormalizedLoaded) {
@@ -92,13 +95,6 @@ function trackPageView(route: RouteLocationNormalizedLoaded) {
   }
 
   const pagePath = route.fullPath || `${window.location.pathname}${window.location.search}${window.location.hash}`;
-
-  if (pagePath === lastTrackedPath) {
-    return;
-  }
-
-  lastTrackedPath = pagePath;
-
   const pageTitle = readRouteTitle(route);
   const eventParams = {
     language: navigator.language,
@@ -107,11 +103,13 @@ function trackPageView(route: RouteLocationNormalizedLoaded) {
     page_title: pageTitle,
   };
 
-  if (GA_MEASUREMENT_ID && typeof window.gtag === "function") {
+  if (GA_MEASUREMENT_ID && typeof window.gtag === "function" && pagePath !== lastGaTrackedPath) {
+    lastGaTrackedPath = pagePath;
     window.gtag("event", "page_view", eventParams);
   }
 
-  if (CLARITY_PROJECT_ID && typeof window.clarity === "function") {
+  if (CLARITY_PROJECT_ID && typeof window.clarity === "function" && pagePath !== lastClarityTrackedPath) {
+    lastClarityTrackedPath = pagePath;
     window.clarity("set", "page_path", pagePath);
     window.clarity("set", "page_title", pageTitle);
     window.clarity("event", "page_view");
